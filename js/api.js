@@ -579,6 +579,109 @@ async function getVentasRecientes(limit = 10) {
     return data || [];
 }
 
+// ============================================================
+// CRUD DE PERFILES (USUARIOS) - SOLO ADMIN
+// ============================================================
+
+async function getProfiles({ limit = 100, offset = 0, filtro = '' } = {}) {
+  let query = supabaseClient
+    .from('profiles')
+    .select('*', { count: 'exact' })
+    .order('full_name', { ascending: true });
+
+  if (filtro) {
+    query = query.ilike('full_name', `%${filtro}%`);
+  }
+
+  const { data, error, count } = await query
+    .range(offset, offset + limit - 1);
+
+  if (error) throw error;
+  return { data, count };
+}
+
+async function updateProfile(id, updates) {
+  const { data, error } = await supabaseClient
+    .from('profiles')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteProfile(id) {
+  // Soft delete: marcamos como inactivo (asumiendo que agregamos columna 'activo')
+  // Si no existe, la agregamos en setup.sql.
+  const { error } = await supabaseClient
+    .from('profiles')
+    .update({ activo: false })
+    .eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+// Crear usuario (invitación) - usa signUp, el trigger creará el perfil
+async function createUserWithProfile(email, password, fullName, role, sede) {
+  const { data, error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+        role: role,
+        sede: sede
+      }
+    }
+  });
+  if (error) throw error;
+  return data;
+}
+
+// ============================================================
+// CRUD DE CLIENTES - ACTUALIZAR / ELIMINAR
+// ============================================================
+
+async function updateCliente(id, updates) {
+  const { data, error } = await supabaseClient
+    .from('clientes')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteCliente(id) {
+  // Verificar si tiene ventas asociadas
+  const { count, error: countError } = await supabaseClient
+    .from('ventas')
+    .select('*', { count: 'exact', head: true })
+    .eq('cliente_id', id);
+  if (countError) throw countError;
+  if (count > 0) {
+    throw new Error('No se puede eliminar el cliente porque tiene notas de entrega asociadas.');
+  }
+  const { error } = await supabaseClient
+    .from('clientes')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+// ============================================================
+// EXPORTAR NUEVAS FUNCIONES
+// ============================================================
+window.getProfiles = getProfiles;
+window.updateProfile = updateProfile;
+window.deleteProfile = deleteProfile;
+window.createUserWithProfile = createUserWithProfile;
+window.updateCliente = updateCliente;
+window.deleteCliente = deleteCliente;
+
 // ============================================
 // EXPORTAR PARA USO GLOBAL
 // ============================================

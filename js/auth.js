@@ -18,7 +18,6 @@ async function loginUser(email, password) {
     try {
         showLoading('#btn-login', 'Verificando...');
 
-        // Autenticar con Supabase Auth
         const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
             email: email,
             password: password
@@ -26,7 +25,6 @@ async function loginUser(email, password) {
 
         if (authError) {
             hideLoading('#btn-login');
-            
             let errorMsg = 'Error al iniciar sesión';
             if (authError.message.includes('Invalid login credentials')) {
                 errorMsg = 'Correo o contraseña incorrectos';
@@ -35,7 +33,6 @@ async function loginUser(email, password) {
             } else if (authError.message.includes('rate limit')) {
                 errorMsg = 'Demasiados intentos. Espere un momento.';
             }
-            
             showAlert(errorMsg, 'error');
             return false;
         }
@@ -46,7 +43,6 @@ async function loginUser(email, password) {
             return false;
         }
 
-        // Obtener perfil del usuario (rol, sede, activo)
         const { data: profile, error: profileError } = await supabaseClient
             .from('profiles')
             .select('*')
@@ -63,12 +59,10 @@ async function loginUser(email, password) {
         if (profile.activo === false) {
             hideLoading('#btn-login');
             showAlert('Su usuario ha sido desactivado. Contacte al administrador.', 'error');
-            // Cerrar sesión en Supabase para evitar acceso
             await supabaseClient.auth.signOut();
             return false;
         }
 
-        // Guardar datos de sesión en localStorage
         const sessionData = {
             id: authData.user.id,
             email: authData.user.email,
@@ -86,7 +80,6 @@ async function loginUser(email, password) {
         hideLoading('#btn-login');
         showAlert(`Bienvenido, ${sessionData.full_name}!`, 'success');
 
-        // Redireccionar al dashboard después de 1 segundo
         setTimeout(() => {
             window.location.href = AUTH_REDIRECT.dashboard;
         }, 1000);
@@ -107,21 +100,15 @@ async function loginUser(email, password) {
 async function logoutUser() {
     try {
         await supabaseClient.auth.signOut();
-        
-        // Limpiar localStorage
         localStorage.removeItem('diamelab_user');
         localStorage.removeItem('diamelab_session');
         localStorage.removeItem('diamelab_tasa_bcv');
-        
         showAlert('Sesión cerrada correctamente', 'success');
-        
         setTimeout(() => {
             window.location.href = AUTH_REDIRECT.login;
         }, 800);
-        
     } catch (error) {
         console.error('Error en logout:', error);
-        // Forzar logout local incluso si falla el server
         localStorage.clear();
         window.location.href = AUTH_REDIRECT.login;
     }
@@ -132,17 +119,13 @@ async function logoutUser() {
 // ============================================
 async function checkSession() {
     try {
-        // Verificar sesión en Supabase
         const { data: { session }, error } = await supabaseClient.auth.getSession();
-        
         if (error || !session) {
             return false;
         }
 
-        // Verificar que tenemos datos de usuario local
         let userData = localStorage.getItem('diamelab_user');
         if (!userData) {
-            // Recuperar perfil
             const { data: { user } } = await supabaseClient.auth.getUser();
             if (user) {
                 const { data: profile } = await supabaseClient
@@ -150,7 +133,6 @@ async function checkSession() {
                     .select('*')
                     .eq('id', user.id)
                     .single();
-                
                 if (profile) {
                     userData = {
                         id: user.id,
@@ -164,7 +146,6 @@ async function checkSession() {
                 }
             }
         } else {
-            // Verificar que el usuario siga activo (consulta rápida)
             const parsed = JSON.parse(userData);
             if (parsed.id) {
                 const { data: profile } = await supabaseClient
@@ -173,7 +154,6 @@ async function checkSession() {
                     .eq('id', parsed.id)
                     .single();
                 if (profile && profile.activo === false) {
-                    // Usuario desactivado, cerrar sesión
                     await logoutUser();
                     return false;
                 }
@@ -189,21 +169,16 @@ async function checkSession() {
 }
 
 // ============================================
-// PROTEGER RUTAS (redirigir si no hay sesión)
+// PROTEGER RUTAS
 // ============================================
 async function protectRoute() {
     const isAuthenticated = await checkSession();
-    
     if (!isAuthenticated) {
-        // Limpiar cualquier dato residual
         localStorage.removeItem('diamelab_user');
         localStorage.removeItem('diamelab_session');
-        
-        // Redireccionar al login
         window.location.href = AUTH_REDIRECT.login;
         return false;
     }
-    
     return true;
 }
 
@@ -228,25 +203,20 @@ function renderUserInfo() {
     const user = JSON.parse(localStorage.getItem('diamelab_user') || '{}');
     if (!user.email) return;
 
-    // Actualizar nombre de usuario
-    const userNameElements = document.querySelectorAll('.user-name');
-    userNameElements.forEach(el => {
+    document.querySelectorAll('.user-name').forEach(el => {
         el.textContent = user.full_name || user.email;
     });
 
-    // Actualizar rol
-    const userRoleElements = document.querySelectorAll('.user-role');
     const roleLabels = {
         'admin': 'Administrador',
         'vendedor_bolivar': 'Vendedor - Ciudad Bolívar',
         'vendedor_guayana': 'Vendedor - Ciudad Guayana',
         'vendedor_maturin': 'Vendedor - Maturín'
     };
-    userRoleElements.forEach(el => {
+    document.querySelectorAll('.user-role').forEach(el => {
         el.textContent = roleLabels[user.role] || user.role;
     });
 
-    // Mostrar/ocultar elementos de admin
     if (user.role === 'admin') {
         document.querySelectorAll('.admin-only').forEach(el => {
             el.style.display = '';
@@ -257,9 +227,7 @@ function renderUserInfo() {
         });
     }
 
-    // Actualizar sede
-    const userSedeElements = document.querySelectorAll('.user-sede');
-    userSedeElements.forEach(el => {
+    document.querySelectorAll('.user-sede').forEach(el => {
         el.textContent = user.sede || '';
     });
 }
@@ -268,10 +236,8 @@ function renderUserInfo() {
 // INICIALIZAR NAVBAR Y SIDEBAR
 // ============================================
 function initNavigation() {
-    // Render info de usuario
     renderUserInfo();
 
-    // Marcar página activa en navegación
     const currentPage = window.location.pathname.split('/').pop() || 'dashboard.html';
     document.querySelectorAll('.nav-link').forEach(link => {
         const href = link.getAttribute('href');
@@ -282,7 +248,6 @@ function initNavigation() {
         }
     });
 
-    // Setup logout button
     const logoutBtn = document.getElementById('btn-logout');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', (e) => {
@@ -291,7 +256,6 @@ function initNavigation() {
         });
     }
 
-    // Setup mobile menu toggle
     const menuToggle = document.getElementById('menu-toggle');
     const sidebar = document.getElementById('sidebar');
     if (menuToggle && sidebar) {
@@ -300,7 +264,6 @@ function initNavigation() {
         });
     }
 
-    // Setup botón Acerca de
     const btnAcerca = document.getElementById('btn-acerca');
     if (btnAcerca) {
         btnAcerca.addEventListener('click', (e) => {
@@ -314,7 +277,6 @@ function initNavigation() {
 // MODAL ACERCA DE
 // ============================================
 function showAboutModal() {
-    // Remover modal anterior si existe
     const existingModal = document.querySelector('.about-modal');
     if (existingModal) existingModal.remove();
 
@@ -372,12 +334,10 @@ function showAboutModal() {
 
     document.body.appendChild(modal);
 
-    // Cerrar al hacer click fuera
     modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.remove();
     });
 
-    // Cerrar con ESC
     const closeOnEsc = (e) => {
         if (e.key === 'Escape') {
             modal.remove();
@@ -391,16 +351,11 @@ function showAboutModal() {
 // AUTO-VERIFICACIÓN AL CARGAR PÁGINAS
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
-    // Páginas que requieren autenticación
     const protectedPages = ['dashboard.html', 'ventas.html', 'pagos.html', 'usuarios.html', 'clientes.html'];
     const currentPage = window.location.pathname.split('/').pop();
 
     if (protectedPages.includes(currentPage)) {
         await protectRoute();
-    }
-
-    // Inicializar navegación en todas las páginas protegidas
-    if (protectedPages.includes(currentPage)) {
         initNavigation();
     }
 });

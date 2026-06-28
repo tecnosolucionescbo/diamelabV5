@@ -27,7 +27,6 @@ async function loginUser(email, password) {
         if (authError) {
             hideLoading('#btn-login');
             
-            // Mensajes de error en español
             let errorMsg = 'Error al iniciar sesión';
             if (authError.message.includes('Invalid login credentials')) {
                 errorMsg = 'Correo o contraseña incorrectos';
@@ -47,18 +46,25 @@ async function loginUser(email, password) {
             return false;
         }
 
-        // Obtener perfil del usuario (rol, sede, etc.)
+        // Obtener perfil del usuario (rol, sede, activo)
         const { data: profile, error: profileError } = await supabaseClient
             .from('profiles')
             .select('*')
             .eq('id', authData.user.id)
             .single();
 
-        if (profileError) {
-            console.warn('Error cargando perfil:', profileError);
-            // Si no hay perfil, crear uno básico
+        if (profileError || !profile) {
             hideLoading('#btn-login');
             showAlert('Error al cargar el perfil. Contacte al administrador.', 'error');
+            return false;
+        }
+
+        // Verificar que el usuario esté activo
+        if (profile.activo === false) {
+            hideLoading('#btn-login');
+            showAlert('Su usuario ha sido desactivado. Contacte al administrador.', 'error');
+            // Cerrar sesión en Supabase para evitar acceso
+            await supabaseClient.auth.signOut();
             return false;
         }
 
@@ -69,6 +75,7 @@ async function loginUser(email, password) {
             full_name: profile.full_name || authData.user.email,
             role: profile.role || 'vendedor_bolivar',
             sede: profile.sede || 'Ciudad Bolivar',
+            activo: profile.activo !== false,
             access_token: authData.session.access_token,
             expires_at: Date.now() + (authData.session.expires_in * 1000)
         };
@@ -90,45 +97,6 @@ async function loginUser(email, password) {
         hideLoading('#btn-login');
         console.error('Error en login:', error);
         showAlert('Error inesperado. Intente nuevamente.', 'error');
-        return false;
-    }
-}
-
-// ============================================
-// REGISTRO DE USUARIO (Solo Admin)
-// ============================================
-async function registerUser(email, password, fullName, role, sede) {
-    try {
-        // Verificar que es admin
-        if (!isAdmin()) {
-            showAlert('Solo los administradores pueden registrar usuarios', 'error');
-            return false;
-        }
-
-        // Crear usuario en Supabase Auth
-        const { data, error } = await supabaseClient.auth.signUp({
-            email: email,
-            password: password,
-            options: {
-                data: {
-                    full_name: fullName,
-                    role: role,
-                    sede: sede
-                }
-            }
-        });
-
-        if (error) {
-            showAlert('Error al registrar: ' + error.message, 'error');
-            return false;
-        }
-
-        showAlert('Usuario registrado exitosamente', 'success');
-        return true;
-
-    } catch (error) {
-        console.error('Error en registro:', error);
-        showAlert('Error inesperado al registrar usuario', 'error');
         return false;
     }
 }
@@ -172,7 +140,7 @@ async function checkSession() {
         }
 
         // Verificar que tenemos datos de usuario local
-        const userData = localStorage.getItem('diamelab_user');
+        let userData = localStorage.getItem('diamelab_user');
         if (!userData) {
             // Recuperar perfil
             const { data: { user } } = await supabaseClient.auth.getUser();
@@ -184,13 +152,30 @@ async function checkSession() {
                     .single();
                 
                 if (profile) {
-                    localStorage.setItem('diamelab_user', JSON.stringify({
+                    userData = {
                         id: user.id,
                         email: user.email,
                         full_name: profile.full_name,
                         role: profile.role,
-                        sede: profile.sede
-                    }));
+                        sede: profile.sede,
+                        activo: profile.activo !== false
+                    };
+                    localStorage.setItem('diamelab_user', JSON.stringify(userData));
+                }
+            }
+        } else {
+            // Verificar que el usuario siga activo (consulta rápida)
+            const parsed = JSON.parse(userData);
+            if (parsed.id) {
+                const { data: profile } = await supabaseClient
+                    .from('profiles')
+                    .select('activo')
+                    .eq('id', parsed.id)
+                    .single();
+                if (profile && profile.activo === false) {
+                    // Usuario desactivado, cerrar sesión
+                    await logoutUser();
+                    return false;
                 }
             }
         }
@@ -407,7 +392,7 @@ function showAboutModal() {
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     // Páginas que requieren autenticación
-    const protectedPages = ['dashboard.html', 'ventas.html', 'pagos.html'];
+    const protectedPages = ['dashboard.html', 'ventas.html', 'pagos.html', 'usuarios.html', 'clientes.html'];
     const currentPage = window.location.pathname.split('/').pop();
 
     if (protectedPages.includes(currentPage)) {
@@ -425,7 +410,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ============================================
 window.loginUser = loginUser;
 window.logoutUser = logoutUser;
-window.registerUser = registerUser;
 window.checkSession = checkSession;
 window.protectRoute = protectRoute;
 window.requireAdmin = requireAdmin;

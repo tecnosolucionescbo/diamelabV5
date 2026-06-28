@@ -9,28 +9,46 @@ let ventasCache = [];
 let itemsTemp = [];
 let editingVentaId = null;
 let viewingVentaId = null;
+// Estado para paginación infinita
+let paginacion = {
+  limit: 50,
+  offset: 0,
+  total: 0,
+  cargando: false,
+  fin: false,
+  filtrosActuales: {}
+};
+let observer = null;
 
-document.addEventListener('DOMContentLoaded', async () => {
-    const isAuth = await protectRoute();
-    if (!isAuth) return;
+// Después de initNavigation() y cargar datos...
+// Configurar observer para infinite scroll
+const observerTarget = document.createElement('tr');
+observerTarget.id = 'observer-target';
+observerTarget.innerHTML = `<td colspan="8" style="height: 20px;"></td>`;
+document.getElementById('tbody-ventas').appendChild(observerTarget);
 
-    initNavigation();
-    updateUserAvatarVentas();
+observer = new IntersectionObserver((entries) => {
+  if (entries[0].isIntersecting && !paginacion.cargando && !paginacion.fin) {
+    cargarVentas(false); // Cargar siguiente página
+  }
+}, { rootMargin: '0px 0px 100px 0px' });
+observer.observe(observerTarget);
 
-    // Cargar tasa BCV
-    await actualizarDisplayTasa('#tasa-bcv');
-
-    // Setup sede segun usuario
-    setupSedeUsuario();
-
-    // Cargar clientes y ventas
-    await cargarClientes();
-    await cargarVentas();
-
-    // Event listeners
-    setupEventListeners();
+// Al aplicar filtros, reiniciar
+document.getElementById('btn-filtrar').addEventListener('click', () => {
+  cargarVentas(true);
 });
-
+document.getElementById('btn-limpiar').addEventListener('click', () => {
+  // Limpiar inputs de filtro
+  document.getElementById('filtro-busqueda').value = '';
+  document.getElementById('filtro-estado').value = '';
+  document.getElementById('filtro-fecha-desde').value = '';
+  document.getElementById('filtro-fecha-hasta').value = '';
+  if (document.getElementById('filtro-sede')) {
+    document.getElementById('filtro-sede').value = '';
+  }
+  cargarVentas(true);
+});
 // ============================================
 // INICIALIZACION
 // ============================================
@@ -153,102 +171,98 @@ function actualizarSelectClientes() {
 // CARGAR VENTAS
 // ============================================
 
-async function cargarVentas() {
-    try {
-        const tbody = document.getElementById('tbody-ventas');
-        tbody.innerHTML = `
-            <tr><td colspan="8" style="text-align: center; padding: 3rem;">
-                <div class="spinner" style="border-color: var(--gray-200); border-top-color: var(--diamelab-primary);"></div>
-                <p style="margin-top: 0.5rem; color: var(--gray-400);">Cargando notas de entrega...</p>
-            </td></tr>
-        `;
+async function cargarVentas(reiniciar = true) {
+  if (reiniciar) {
+    paginacion.offset = 0;
+    paginacion.fin = false;
+    document.getElementById('tbody-ventas').innerHTML = ''; // Limpiar
+  }
 
-        const filtros = {};
-        const estado = document.getElementById('filtro-estado').value;
-        const sede = document.getElementById('filtro-sede').value;
-        const fechaDesde = document.getElementById('filtro-fecha-desde').value;
-        const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
+  if (paginacion.cargando || paginacion.fin) return;
+  paginacion.cargando = true;
 
-        if (estado) filtros.estado = estado;
-        if (sede) filtros.sede = sede;
-        if (fechaDesde) filtros.fecha_desde = fechaDesde;
-        if (fechaHasta) filtros.fecha_hasta = fechaHasta;
+  // Mostrar indicador de carga al final
+  mostrarCargaInfinita(true);
 
-        ventasCache = await getVentas(filtros);
+  try {
+    const filtros = obtenerFiltros();
+    paginacion.filtrosActuales = filtros;
 
-        // Aplicar filtro de busqueda local
-        const busqueda = document.getElementById('filtro-busqueda').value.toLowerCase().trim();
-        let ventasFiltradas = ventasCache;
-        if (busqueda) {
-            ventasFiltradas = ventasCache.filter(v => 
-                (v.correlacion_a2 && v.correlacion_a2.toLowerCase().includes(busqueda)) ||
-                (v.cliente && v.cliente.razon_social && v.cliente.razon_social.toLowerCase().includes(busqueda))
-            );
-        }
+    const { data, count } = await getVentas(
+      filtros,
+      paginacion.limit,
+      paginacion.offset
+    );
 
-        renderizarVentas(ventasFiltradas);
+    if (reiniciar) {
+      paginacion.total = count;
+      // Limpiar tabla
+      document.getElementById('tbody-ventas').innerHTML = '';
+    }
 
-    } catch (error) {
-        console.error('Error cargando ventas:', error);
-        showAlert('Error al cargar las notas de entrega', 'error');
+    if (data.length === 0) {
+      paginacion.fin = true;
+      if (paginacion.offset === 0) {
+        // No hay datos
         document.getElementById('tbody-ventas').innerHTML = `
-            <tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--danger);">
-                Error al cargar los datos. <button class="btn btn-sm btn-secondary" onclick="cargarVentas()">Reintentar</button>
-            </td></tr>
+          <tr><td colspan="8">
+            <div class="empty-state">
+              <div class="empty-state-icon">📄</div>
+              <h3>Sin notas de entrega</h3>
+              <p>No se encontraron notas con los filtros aplicados.</p>
+            </div>
+          </td></tr>
         `;
+      }
+      mostrarCargaInfinita(false);
+      paginacion.cargando = false;
+      return;
     }
-}
 
-function renderizarVentas(ventas) {
+    // Renderizar las filas añadiendo al final
     const tbody = document.getElementById('tbody-ventas');
-
-    if (!ventas || ventas.length === 0) {
-        tbody.innerHTML = `
-            <tr><td colspan="8">
-                <div class="empty-state">
-                    <div class="empty-state-icon">&#128196;</div>
-                    <h3>Sin notas de entrega</h3>
-                    <p>No se encontraron notas con los filtros aplicados.</p>
-                </div>
-            </td></tr>
-        `;
-        return;
+    // Si es la primera carga y no hay datos, mostrar mensaje
+    if (reiniciar && data.length === 0) {
+      tbody.innerHTML = `
+        <tr><td colspan="8">
+          <div class="empty-state">
+            <div class="empty-state-icon">📄</div>
+            <h3>Sin notas de entrega</h3>
+            <p>No se encontraron notas con los filtros aplicados.</p>
+          </div>
+        </td></tr>
+      `;
+    } else {
+      // Agregar nuevas filas
+      const nuevasFilas = data.map(v => generarFilaVenta(v)).join('');
+      tbody.insertAdjacentHTML('beforeend', nuevasFilas);
     }
 
-    tbody.innerHTML = ventas.map(v => {
-        const badgeClass = {
-            'pendiente': 'badge-pendiente', 'parcial': 'badge-parcial',
-            'pagada': 'badge-pagada', 'anulada': 'badge-anulada'
-        }[v.estado] || 'badge-pendiente';
+    paginacion.offset += data.length;
+    paginacion.fin = paginacion.offset >= paginacion.total;
 
-        const estadoText = { 'pendiente': 'Pendiente', 'parcial': 'Parcial', 'pagada': 'Pagada', 'anulada': 'Anulada' }[v.estado] || v.estado;
-        const clienteNombre = v.cliente ? v.cliente.razon_social : 'N/A';
+    // Si no hay más, ocultar indicador
+    if (paginacion.fin) {
+      mostrarCargaInfinita(false);
+    }
 
-        // Calcular dias para vencimiento
-        const today = new Date();
-        const vencimiento = new Date(v.fecha_vencimiento);
-        const diasRestantes = Math.ceil((vencimiento - today) / (1000 * 60 * 60 * 24));
-        const vencimientoClass = diasRestantes < 0 ? 'text-danger' : diasRestantes <= 3 ? 'text-warning' : '';
-        const vencText = diasRestantes < 0 ? `Vencido` : `${diasRestantes}d`;
-
-        return `
-            <tr>
-                <td><strong>${v.correlacion_a2 || 'N/A'}</strong></td>
-                <td>${clienteNombre}</td>
-                <td>${v.sede || 'N/A'}</td>
-                <td>${formatDate(v.fecha_emision)}</td>
-                <td class="${vencimientoClass}">${formatDate(v.fecha_vencimiento)} <small>(${vencText})</small></td>
-                <td><strong>${formatUSD(v.monto_total_usd)}</strong></td>
-                <td><span class="badge ${badgeClass}">${estadoText}</span></td>
-                <td>
-                    <button class="btn btn-sm btn-ghost" onclick="verVenta('${v.id}')" title="Ver detalle">&#128065;</button>
-                    ${v.estado !== 'anulada' ? `<button class="btn btn-sm btn-ghost" onclick="registrarPago('${v.id}')" title="Registrar pago">&#128178;</button>` : ''}
-                    ${isAdmin() || v.estado === 'pendiente' ? `<button class="btn btn-sm btn-ghost" onclick="anularVentaConfirm('${v.id}')" title="Anular">&#128683;</button>` : ''}
-                </td>
-            </tr>
-        `;
-    }).join('');
+  } catch (error) {
+    console.error('Error cargando ventas:', error);
+    showAlert('Error al cargar las notas de entrega', 'error');
+  } finally {
+    paginacion.cargando = false;
+    if (!paginacion.fin) {
+      // Mantener indicador de carga si hay más
+      mostrarCargaInfinita(true);
+    } else {
+      mostrarCargaInfinita(false);
+    }
+  }
 }
+
+document.getElementById('filtro-busqueda').addEventListener('input', debounce(() => {
+  cargarVentas(true);
+}, 400));
 
 function aplicarFiltros() {
     cargarVentas();
@@ -446,6 +460,73 @@ async function guardarVenta() {
             showAlert('Error al guardar la nota de entrega: ' + error.message, 'error');
         }
     }
+}
+
+
+function obtenerFiltros() {
+  const estado = document.getElementById('filtro-estado').value;
+  const sede = document.getElementById('filtro-sede').value;
+  const fechaDesde = document.getElementById('filtro-fecha-desde').value;
+  const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
+  const busqueda = document.getElementById('filtro-busqueda').value.toLowerCase().trim();
+
+  const filtros = {};
+  if (estado) filtros.estado = estado;
+  if (sede) filtros.sede = sede;
+  if (fechaDesde) filtros.fecha_desde = fechaDesde;
+  if (fechaHasta) filtros.fecha_hasta = fechaHasta;
+  // La búsqueda se maneja localmente (opcional), pero mejor pasarla al backend
+  if (busqueda) filtros.busqueda = busqueda;
+  return filtros;
+}
+
+function generarFilaVenta(v) {
+  const badgeClass = {
+    'pendiente': 'badge-pendiente', 'parcial': 'badge-parcial',
+    'pagada': 'badge-pagada', 'anulada': 'badge-anulada'
+  }[v.estado] || 'badge-pendiente';
+
+  const estadoText = { 'pendiente': 'Pendiente', 'parcial': 'Parcial', 'pagada': 'Pagada', 'anulada': 'Anulada' }[v.estado] || v.estado;
+  const clienteNombre = v.cliente ? v.cliente.razon_social : 'N/A';
+
+  const today = new Date();
+  const vencimiento = new Date(v.fecha_vencimiento);
+  const diasRestantes = Math.ceil((vencimiento - today) / (1000 * 60 * 60 * 24));
+  const vencimientoClass = diasRestantes < 0 ? 'text-danger' : diasRestantes <= 3 ? 'text-warning' : '';
+  const vencText = diasRestantes < 0 ? `Vencido` : `${diasRestantes}d`;
+
+  return `
+    <tr>
+      <td><strong>${v.correlacion_a2 || 'N/A'}</strong></td>
+      <td>${clienteNombre}</td>
+      <td>${v.sede || 'N/A'}</td>
+      <td>${formatDate(v.fecha_emision)}</td>
+      <td class="${vencimientoClass}">${formatDate(v.fecha_vencimiento)} <small>(${vencText})</small></td>
+      <td><strong>${formatUSD(v.monto_total_usd)}</strong></td>
+      <td><span class="badge ${badgeClass}">${estadoText}</span></td>
+      <td>
+        <button class="btn btn-sm btn-ghost" onclick="verVenta('${v.id}')" title="Ver detalle">👁️</button>
+        ${v.estado !== 'anulada' ? `<button class="btn btn-sm btn-ghost" onclick="registrarPago('${v.id}')" title="Registrar pago">💰</button>` : ''}
+        ${isAdmin() || v.estado === 'pendiente' ? `<button class="btn btn-sm btn-ghost" onclick="anularVentaConfirm('${v.id}')" title="Anular">🚫</button>` : ''}
+      </td>
+    </tr>
+  `;
+}
+
+function mostrarCargaInfinita(mostrar) {
+  let indicador = document.getElementById('carga-infinita-indicador');
+  if (!indicador) {
+    indicador = document.createElement('tr');
+    indicador.id = 'carga-infinita-indicador';
+    indicador.innerHTML = `<td colspan="8" style="text-align: center; padding: 1rem;">
+      <div class="spinner" style="border-color: var(--gray-200); border-top-color: var(--diamelab-primary);"></div>
+      <p style="margin-top: 0.5rem; color: var(--gray-400);">Cargando más notas...</p>
+    </td>`;
+    // Insertar al final del tbody
+    const tbody = document.getElementById('tbody-ventas');
+    tbody.appendChild(indicador);
+  }
+  indicador.style.display = mostrar ? '' : 'none';
 }
 
 // ============================================

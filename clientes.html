@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clientes - Diamelab</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar (igual que en otros módulos) -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/logo-diamelab.jpg" alt="Diamelab">
+                <div>
+                    <div class="brand-text">Diamelab</div>
+                    <div class="brand-tagline">Sistema de Gestión</div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="dashboard.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        Dashboard
+                    </a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Operaciones</div>
+                    <a href="ventas.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Notas de Entrega
+                    </a>
+                    <a href="pagos.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                        Pagos
+                    </a>
+                </div>
+                <div class="nav-section admin-only">
+                    <div class="nav-section-title">Administración</div>
+                    <a href="usuarios.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        Usuarios
+                    </a>
+                    <a href="clientes.html" class="nav-link active">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        Clientes
+                    </a>
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar" id="user-avatar">U</div>
+                    <div class="user-info">
+                        <div class="user-name">Cargando...</div>
+                        <div class="user-role">Cargando...</div>
+                    </div>
+                </div>
+                <a href="#" class="nav-link" id="btn-acerca">Acerca de</a>
+                <a href="#" class="nav-link" id="btn-logout" style="color: var(--danger);">Cerrar Sesión</a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menu-toggle">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <h1 class="page-title">Clientes</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="tasa-bcv-display" id="tasa-bcv"><span class="spinner-tasa"></span></div>
+                    <button class="topbar-btn" id="btn-refresh-tasa" title="Actualizar tasa BCV">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                    <span class="user-sede"></span>
+                </div>
+            </header>
+
+            <div class="content-area">
+                <div class="toolbar">
+                    <div class="toolbar-filters">
+                        <input type="text" id="filtro-cliente" class="form-control" placeholder="Buscar por nombre o RIF..." style="min-width: 250px;">
+                        <button class="btn btn-secondary btn-sm" id="btn-filtrar-clientes">Filtrar</button>
+                        <button class="btn btn-ghost btn-sm" id="btn-limpiar-clientes">Limpiar</button>
+                    </div>
+                    <div class="toolbar-actions">
+                        <button class="btn btn-primary" id="btn-nuevo-cliente">+ Nuevo Cliente</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body" style="padding:0;">
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Razón Social</th>
+                                        <th>RIF</th>
+                                        <th>Dirección</th>
+                                        <th>Teléfono</th>
+                                        <th>Email</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-clientes">
+                                    <tr><td colspan="6" style="text-align:center;padding:2rem;">Cargando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Nuevo/Editar Cliente -->
+    <div class="modal-overlay" id="modal-cliente" style="display:none;">
+        <div class="modal-content" style="max-width:500px;">
+            <div class="modal-header">
+                <h3 id="modal-cliente-titulo">Nuevo Cliente</h3>
+                <button class="modal-close" id="btn-cerrar-modal-cliente">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-cliente">
+                    <input type="hidden" id="c-id">
+                    <div class="form-group">
+                        <label class="form-label">Razón Social <span class="required">*</span></label>
+                        <input type="text" id="c-razon" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">RIF <span class="required">*</span></label>
+                        <input type="text" id="c-rif" class="form-control" placeholder="J-12345678-9" required>
+                        <div class="form-text">Formato: J-12345678-9</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Dirección</label>
+                        <input type="text" id="c-direccion" class="form-control" placeholder="Dirección fiscal (opcional)">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md);">
+                        <div class="form-group">
+                            <label class="form-label">Teléfono</label>
+                            <input type="text" id="c-telefono" class="form-control" placeholder="02XX-XXXXXXX">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="c-email" class="form-control" placeholder="correo@ejemplo.com">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancelar-cliente">Cancelar</button>
+                <button class="btn btn-primary" id="btn-guardar-cliente">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/supabase-config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/clientes.js"></script>
+</body>
+</html>

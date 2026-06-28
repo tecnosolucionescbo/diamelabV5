@@ -305,25 +305,56 @@ async function searchClientes(query) {
 // ============================================
 
 async function getVentas(filtros = {}, limit = null, offset = 0) {
-  let query = supabaseClient
-    .from('ventas')
-    .select(`
-      *,
-      cliente:clientes(id, razon_social, rif),
-      vendedor:profiles(id, full_name)
-    `, { count: 'exact' });
+    let query = supabaseClient
+        .from('ventas')
+        .select(`
+            *,
+            cliente:clientes(id, razon_social, rif),
+            vendedor:profiles(id, full_name)
+        `, { count: 'exact' });
 
-  // ... (mantén los filtros igual) ...
+    // Filtros
+    if (filtros.estado) {
+        query = query.eq('estado', filtros.estado);
+    }
+    if (filtros.sede && !isAdmin()) {
+        query = query.eq('sede', getUserSede());
+    } else if (filtros.sede) {
+        query = query.eq('sede', filtros.sede);
+    }
+    if (filtros.cliente_id) {
+        query = query.eq('cliente_id', filtros.cliente_id);
+    }
+    if (filtros.fecha_desde) {
+        query = query.gte('fecha_emision', filtros.fecha_desde);
+    }
+    if (filtros.fecha_hasta) {
+        query = query.lte('fecha_emision', filtros.fecha_hasta);
+    }
+    if (filtros.busqueda) {
+        // Buscar en correlacion_a2 o en razón social del cliente
+        // Primero obtener clientes que coinciden
+        const { data: clientes } = await supabaseClient
+            .from('clientes')
+            .select('id')
+            .ilike('razon_social', `%${filtros.busqueda}%`);
+        const ids = clientes.map(c => c.id);
+        if (ids.length > 0) {
+            query = query.or(`correlacion_a2.ilike.%${filtros.busqueda}%,cliente_id.in.(${ids.join(',')})`);
+        } else {
+            query = query.ilike('correlacion_a2', `%${filtros.busqueda}%`);
+        }
+    }
 
-  // Aplicar orden y paginación
-  query = query.order('fecha_emision', { ascending: false });
-  if (limit !== null) {
-    query = query.range(offset, offset + limit - 1);
-  }
+    // Aplicar orden y paginación
+    query = query.order('fecha_emision', { ascending: false });
+    if (limit !== null) {
+        query = query.range(offset, offset + limit - 1);
+    }
 
-  const { data, error, count } = await query;
-  if (error) throw error;
-  return { data: data || [], count };
+    const { data, error, count } = await query;
+    if (error) throw error;
+    return { data: data || [], count };
 }
 
 async function getVentaById(id) {
@@ -660,18 +691,8 @@ async function deleteCliente(id) {
 }
 
 // ============================================================
-// EXPORTAR NUEVAS FUNCIONES
-// ============================================================
-window.getProfiles = getProfiles;
-window.updateProfile = updateProfile;
-window.deleteProfile = deleteProfile;
-window.createUserWithProfile = createUserWithProfile;
-window.updateCliente = updateCliente;
-window.deleteCliente = deleteCliente;
-
-// ============================================
 // EXPORTAR PARA USO GLOBAL
-// ============================================
+// ============================================================
 window.obtenerTasaBCV = obtenerTasaBCV;
 window.actualizarDisplayTasa = actualizarDisplayTasa;
 window.invalidateTasaCache = invalidateTasaCache;
@@ -691,3 +712,9 @@ window.uploadFile = uploadFile;
 window.deleteFile = deleteFile;
 window.getDashboardStats = getDashboardStats;
 window.getVentasRecientes = getVentasRecientes;
+window.getProfiles = getProfiles;
+window.updateProfile = updateProfile;
+window.deleteProfile = deleteProfile;
+window.createUserWithProfile = createUserWithProfile;
+window.updateCliente = updateCliente;
+window.deleteCliente = deleteCliente;

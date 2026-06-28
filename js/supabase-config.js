@@ -12,8 +12,8 @@
 // ============================================
 // REEMPLAZA ESTOS VALORES CON TUS CREDENCIALES
 // ============================================
-const SUPABASE_URL = 'https://tu-proyecto.supabase.co';  // TU URL DE SUPABASE
-const SUPABASE_ANON_KEY = 'tu-anon-key-aqui';             // TU ANON KEY
+const SUPABASE_URL = 'https://uvutatsvgexlobswuuhh.supabase.co';  // TU URL DE SUPABASE
+const SUPABASE_ANON_KEY = 'sb_publishable_qYpXkE8bJLrY8TWbuZewCQ_s4ACxqfn';             // TU ANON KEY
 
 // ============================================
 // INICIALIZACIÓN DEL CLIENTE SUPABASE

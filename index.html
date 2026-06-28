@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diamelab - Iniciar Sesión</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="login-page">
+
+    <div class="login-container">
+        <!-- Panel de marca -->
+        <div class="login-brand">
+            <img src="assets/logo-diamelab.jpg" alt="Diamelab" class="login-brand-logo">
+            <h1>Diamelab</h1>
+            <p>Equipos e Insumos para Laboratorios Clínicos</p>
+            <span class="login-brand-tagline">A tu disposición siempre</span>
+        </div>
+
+        <!-- Panel de login -->
+        <div class="login-form-wrapper">
+            <h2>Bienvenido</h2>
+            <p class="login-subtitle">Inicie sesión para acceder al sistema</p>
+
+            <form id="login-form" class="login-form" autocomplete="off">
+                <div class="form-group">
+                    <label for="email" class="form-label">Correo Electrónico</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        class="form-control" 
+                        placeholder="usuario@diamelab.com"
+                        required
+                        autocomplete="email"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label">Contraseña</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        class="form-control" 
+                        placeholder="Ingrese su contraseña"
+                        required
+                        autocomplete="current-password"
+                    >
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-login" id="btn-login">
+                    Iniciar Sesión
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <p>Sistema exclusivo para personal autorizado de <strong>Diamelab, C.A.</strong></p>
+                <p style="margin-top: 8px;">¿Problemas para acceder? Contacte al administrador.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/supabase-config.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        // ============================================
+        // LOGIN - Lógica específica de la página
+        // ============================================
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            const loginForm = document.getElementById('login-form');
+            
+            // Verificar si ya hay sesión activa
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session) {
+                    // Ya tiene sesión, redirigir al dashboard
+                    window.location.href = 'dashboard.html';
+                    return;
+                }
+            } catch (e) {
+                console.log('No hay sesión activa');
+            }
+
+            // Manejar submit del formulario
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const email = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value;
+                
+                // Validaciones básicas
+                if (!email || !password) {
+                    showAlert('Por favor complete todos los campos', 'warning');
+                    return;
+                }
+
+                // Llamar a la función de login
+                await loginUser(email, password);
+            });
+        });
+
+        // Función de login (también definida en auth.js, pero necesaria aquí para el primer cargado)
+        async function loginUser(email, password) {
+            try {
+                showLoading('#btn-login', 'Verificando...');
+
+                const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                if (authError) {
+                    hideLoading('#btn-login');
+                    let errorMsg = 'Error al iniciar sesión';
+                    if (authError.message.includes('Invalid login credentials')) {
+                        errorMsg = 'Correo o contraseña incorrectos';
+                    } else if (authError.message.includes('Email not confirmed')) {
+                        errorMsg = 'El correo no ha sido confirmado. Contacte al administrador.';
+                    } else if (authError.message.includes('rate limit')) {
+                        errorMsg = 'Demasiados intentos. Espere un momento.';
+                    }
+                    showAlert(errorMsg, 'error');
+                    return false;
+                }
+
+                if (!authData.user) {
+                    hideLoading('#btn-login');
+                    showAlert('No se pudo obtener la información del usuario', 'error');
+                    return false;
+                }
+
+                // Obtener perfil
+                const { data: profile, error: profileError } = await supabaseClient
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', authData.user.id)
+                    .single();
+
+                if (profileError) {
+                    hideLoading('#btn-login');
+                    showAlert('Error al cargar el perfil. Contacte al administrador.', 'error');
+                    return false;
+                }
+
+                // Guardar sesión
+                const sessionData = {
+                    id: authData.user.id,
+                    email: authData.user.email,
+                    full_name: profile.full_name || authData.user.email,
+                    role: profile.role || 'vendedor_bolivar',
+                    sede: profile.sede || 'Ciudad Bolivar',
+                    access_token: authData.session.access_token,
+                    expires_at: Date.now() + (authData.session.expires_in * 1000)
+                };
+
+                localStorage.setItem('diamelab_user', JSON.stringify(sessionData));
+                localStorage.setItem('diamelab_session', JSON.stringify(authData.session));
+
+                hideLoading('#btn-login');
+                showAlert(`Bienvenido, ${sessionData.full_name}!`, 'success');
+
+                setTimeout(() => {
+                    window.location.href = 'dashboard.html';
+                }, 1000);
+
+                return true;
+
+            } catch (error) {
+                hideLoading('#btn-login');
+                console.error('Error en login:', error);
+                showAlert('Error inesperado. Intente nuevamente.', 'error');
+                return false;
+            }
+        }
+    </script>
+    <script src="js/auth.js"></script>
+</body>
+</html>

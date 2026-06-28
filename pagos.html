@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pagos - Diamelab</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/logo-diamelab.jpg" alt="Diamelab">
+                <div>
+                    <div class="brand-text">Diamelab</div>
+                    <div class="brand-tagline">Sistema de Gestion</div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="dashboard.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        Dashboard
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Operaciones</div>
+                    <a href="ventas.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Notas de Entrega
+                    </a>
+                    <a href="pagos.html" class="nav-link active">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                        Pagos
+                    </a>
+                </div>
+
+                <div class="nav-section admin-only">
+                    <div class="nav-section-title">Administracion</div>
+                    <a href="#" class="nav-link" onclick="showAlert('Modulo en desarrollo','info'); return false;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        Usuarios
+                    </a>
+                    <a href="#" class="nav-link" onclick="showAlert('Modulo en desarrollo','info'); return false;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        Clientes
+                    </a>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar" id="user-avatar">U</div>
+                    <div class="user-info">
+                        <div class="user-name">Cargando...</div>
+                        <div class="user-role">Cargando...</div>
+                    </div>
+                </div>
+                <a href="#" class="nav-link" id="btn-acerca">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    Acerca de
+                </a>
+                <a href="#" class="nav-link" id="btn-logout" style="color: var(--danger);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Cerrar Sesion
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Topbar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menu-toggle">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <h1 class="page-title">Pagos</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="tasa-bcv-display" id="tasa-bcv">
+                        <span class="spinner-tasa"></span>
+                    </div>
+                    <button class="topbar-btn" id="btn-refresh-tasa" title="Actualizar tasa BCV">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                    <span class="user-sede" style="font-size: 0.8125rem; color: var(--gray-500); font-weight: 500;"></span>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <div class="content-area">
+                <!-- Selector de Venta -->
+                <div class="card" style="margin-bottom: var(--space-lg);">
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: var(--space-md); align-items: flex-end;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Nota de Entrega</label>
+                                <select id="select-venta" class="form-control form-select">
+                                    <option value="">Seleccione una nota de entrega...</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Buscar por A2</label>
+                                <input type="text" id="buscar-a2" class="form-control" placeholder="Ej: NE-000001">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Buscar por Cliente</label>
+                                <input type="text" id="buscar-cliente-pago" class="form-control" placeholder="Nombre o RIF...">
+                            </div>
+                            <button class="btn btn-primary" id="btn-buscar-venta" style="margin-bottom: 0;">Buscar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Info de Venta Seleccionada -->
+                <div class="card" id="info-venta-card" style="margin-bottom: var(--space-lg); display: none;">
+                    <div class="card-header">
+                        <h3>Informacion de la Nota</h3>
+                        <span class="badge" id="venta-estado-badge">Pendiente</span>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-md);">
+                            <div>
+                                <p class="form-label">Correlativo A2</p>
+                                <p style="font-weight: 700;" id="info-a2">-</p>
+                            </div>
+                            <div>
+                                <p class="form-label">Cliente</p>
+                                <p style="font-weight: 600;" id="info-cliente">-</p>
+                            </div>
+                            <div>
+                                <p class="form-label">Monto Total (USD)</p>
+                                <p style="font-size: 1.125rem; font-weight: 700; color: var(--diamelab-primary);" id="info-monto">$0.00</p>
+                            </div>
+                            <div>
+                                <p class="form-label">Total Pagado (USD)</p>
+                                <p style="font-size: 1.125rem; font-weight: 700; color: var(--success);" id="info-pagado">$0.00</p>
+                            </div>
+                            <div>
+                                <p class="form-label">Saldo Pendiente (USD)</p>
+                                <p style="font-size: 1.125rem; font-weight: 700; color: var(--danger);" id="info-saldo">$0.00</p>
+                            </div>
+                        </div>
+                        <!-- Barra de progreso -->
+                        <div style="margin-top: var(--space-md);">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--gray-500); margin-bottom: 4px;">
+                                <span>Progreso de pago</span>
+                                <span id="info-porcentaje">0%</span>
+                            </div>
+                            <div style="width: 100%; height: 8px; background: var(--gray-200); border-radius: var(--radius-full); overflow: hidden;">
+                                <div id="barra-progreso" style="height: 100%; background: linear-gradient(90deg, var(--success) 0%, var(--diamelab-accent) 100%); border-radius: var(--radius-full); width: 0%; transition: width 0.5s ease;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulario de Pago -->
+                <div class="card" id="form-pago-card" style="margin-bottom: var(--space-lg); display: none;">
+                    <div class="card-header">
+                        <h3>Registrar Nuevo Pago</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="form-pago">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
+                                <div class="form-group">
+                                    <label class="form-label">Fecha de Pago <span class="required">*</span></label>
+                                    <input type="date" id="p-fecha" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Monto Pagado (USD) <span class="required">*</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" id="p-monto" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Metodo de Pago <span class="required">*</span></label>
+                                    <select id="p-metodo" class="form-control form-select" required>
+                                        <option value="">Seleccionar...</option>
+                                        <option value="Transferencia">Transferencia</option>
+                                        <option value="Pago Movil">Pago Movil</option>
+                                        <option value="Divisas Efectivo">Divisas Efectivo</option>
+                                        <option value="Bs Efectivo">Bs. Efectivo</option>
+                                        <option value="Zelle">Zelle</option>
+                                        <option value="Binance">Binance</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
+                                <div class="form-group">
+                                    <label class="form-label">Tasa BCV Usada <span class="required">*</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">Bs./USD</span>
+                                        <input type="number" id="p-tasa" class="form-control" step="0.0001" min="0" placeholder="0.0000" required>
+                                    </div>
+                                    <div class="form-text">Puede ajustar para pagos retroactivos</div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Referencia / Nro. Operacion</label>
+                                    <input type="text" id="p-referencia" class="form-control" placeholder="Nro. de referencia, transferencia, etc.">
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: var(--space-md);">
+                                <label class="form-label">Banco de Origen</label>
+                                <input type="text" id="p-banco" class="form-control" placeholder="Nombre del banco (opcional)">
+                            </div>
+
+                            <!-- Archivos adjuntos -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
+                                <div class="form-group">
+                                    <label class="form-label">Comprobante de Pago</label>
+                                    <input type="file" id="p-comprobante" class="form-control" accept="image/*,.pdf">
+                                    <div class="form-text">Imagen o PDF del comprobante</div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Retencion IVA</label>
+                                    <input type="file" id="p-ret-iva" class="form-control" accept="image/*,.pdf">
+                                    <div class="form-text">Documento de retencion IVA</div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Retencion ISLR</label>
+                                    <input type="file" id="p-ret-islr" class="form-control" accept="image/*,.pdf">
+                                    <div class="form-text">Documento de retencion ISLR</div>
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Equivalencia en Bs.</label>
+                                <input type="text" id="p-monto-bs" class="form-control" disabled style="font-weight: 700; color: var(--diamelab-primary); max-width: 300px;">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-ghost" id="btn-limpiar-pago">Limpiar</button>
+                        <button class="btn btn-primary" id="btn-guardar-pago">Registrar Pago</button>
+                    </div>
+                </div>
+
+                <!-- Historial de Pagos -->
+                <div class="card" id="historial-pagos-card" style="display: none;">
+                    <div class="card-header">
+                        <h3>Historial de Pagos</h3>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <div class="table-container">
+                            <table class="table" id="tabla-pagos">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Monto (USD)</th>
+                                        <th>Metodo</th>
+                                        <th>Referencia</th>
+                                        <th>Banco</th>
+                                        <th>Tasa BCV</th>
+                                        <th>Comprobantes</th>
+                                        <th>Registrado por</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-pagos">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; padding: 2rem; color: var(--gray-400);">
+                                            Seleccione una nota de entrega para ver sus pagos.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/supabase-config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/pagos.js"></script>
+</body>
+</html>

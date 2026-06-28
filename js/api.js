@@ -301,7 +301,7 @@ async function searchClientes(query) {
 }
 
 // ============================================
-// CRUD DE VENTAS
+// CRUD DE VENTAS (con paginación)
 // ============================================
 
 async function getVentas(filtros = {}, limit = null, offset = 0) {
@@ -522,27 +522,39 @@ async function deleteFile(bucket, path) {
 }
 
 // ============================================
-// DASHBOARD - ESTADÍSTICAS
+// DASHBOARD - ESTADÍSTICAS (OPTIMIZADO)
 // ============================================
 
 async function getDashboardStats() {
     const sede = isAdmin() ? null : getUserSede();
     
-    // Ventas por estado
-    let ventasQuery = supabaseClient.from('ventas').select('estado, monto_total_usd');
+    // Construir la consulta de ventas
+    let ventasQuery = supabaseClient
+        .from('ventas')
+        .select('estado, monto_total_usd');
     if (sede) ventasQuery = ventasQuery.eq('sede', sede);
     const { data: ventas, error: vError } = await ventasQuery;
     if (vError) throw vError;
 
-    // Pagos
-    let pagosQuery = supabaseClient.from('pagos').select('monto_pagado_usd');
-    if (sede) {
-        pagosQuery = pagosQuery.eq('venta:sede', sede); // Esto requiere ajuste
-    }
-    // Para pagos por sede, hacemos un approach diferente
-    const { data: pagos, error: pError } = await supabaseClient
+    // Obtener total pagado por sede (si es necesario)
+    let pagosQuery = supabaseClient
         .from('pagos')
-        .select('monto_pagado_usd, venta:ventas!inner(sede)');
+        .select('monto_pagado_usd, venta_id');
+    if (sede) {
+        // Filtrar pagos cuyas ventas pertenezcan a la sede
+        const { data: ventasSede, error: vsError } = await supabaseClient
+            .from('ventas')
+            .select('id')
+            .eq('sede', sede);
+        if (vsError) throw vsError;
+        const ids = ventasSede.map(v => v.id);
+        if (ids.length === 0) {
+            pagosQuery = pagosQuery.in('venta_id', []);
+        } else {
+            pagosQuery = pagosQuery.in('venta_id', ids);
+        }
+    }
+    const { data: pagos, error: pError } = await pagosQuery;
     if (pError) throw pError;
 
     // Calcular estadísticas
@@ -557,24 +569,19 @@ async function getDashboardStats() {
     };
 
     ventas.forEach(v => {
-        stats.totalVentas += parseFloat(v.monto_total_usd);
+        const monto = parseFloat(v.monto_total_usd) || 0;
+        stats.totalVentas += monto;
         if (v.estado === 'pendiente') stats.ventasPendientes++;
         if (v.estado === 'pagada') stats.ventasPagadas++;
         if (v.estado === 'parcial') stats.ventasParciales++;
         if (v.estado === 'anulada') stats.ventasAnuladas++;
     });
 
-    // Filtrar pagos por sede si es necesario
-    const pagosFiltrados = sede 
-        ? (pagos || []).filter(p => p.venta && p.venta.sede === sede)
-        : (pagos || []);
-
-    pagosFiltrados.forEach(p => {
-        stats.totalPagado += parseFloat(p.monto_pagado_usd);
+    pagos.forEach(p => {
+        stats.totalPagado += parseFloat(p.monto_pagado_usd) || 0;
     });
 
     stats.totalPendiente = stats.totalVentas - stats.totalPagado;
-
     return stats;
 }
 
@@ -631,7 +638,6 @@ async function updateProfile(id, updates) {
 
 async function deleteProfile(id) {
   // Soft delete: marcamos como inactivo (asumiendo que agregamos columna 'activo')
-  // Si no existe, la agregamos en setup.sql.
   const { error } = await supabaseClient
     .from('profiles')
     .update({ activo: false })

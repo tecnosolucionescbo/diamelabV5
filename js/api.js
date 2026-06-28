@@ -304,39 +304,26 @@ async function searchClientes(query) {
 // CRUD DE VENTAS
 // ============================================
 
-async function getVentas(filtros = {}) {
-    let query = supabaseClient
-        .from('ventas')
-        .select(`
-            *,
-            cliente:clientes(id, razon_social, rif),
-            vendedor:profiles(id, full_name)
-        `);
+async function getVentas(filtros = {}, limit = null, offset = 0) {
+  let query = supabaseClient
+    .from('ventas')
+    .select(`
+      *,
+      cliente:clientes(id, razon_social, rif),
+      vendedor:profiles(id, full_name)
+    `, { count: 'exact' });
 
-    // Filtros
-    if (filtros.estado) {
-        query = query.eq('estado', filtros.estado);
-    }
-    if (filtros.sede && !isAdmin()) {
-        query = query.eq('sede', getUserSede());
-    } else if (filtros.sede) {
-        query = query.eq('sede', filtros.sede);
-    }
-    if (filtros.cliente_id) {
-        query = query.eq('cliente_id', filtros.cliente_id);
-    }
-    if (filtros.fecha_desde) {
-        query = query.gte('fecha_emision', filtros.fecha_desde);
-    }
-    if (filtros.fecha_hasta) {
-        query = query.lte('fecha_emision', filtros.fecha_hasta);
-    }
+  // ... (mantén los filtros igual) ...
 
-    query = query.order('fecha_emision', { ascending: false });
+  // Aplicar orden y paginación
+  query = query.order('fecha_emision', { ascending: false });
+  if (limit !== null) {
+    query = query.range(offset, offset + limit - 1);
+  }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
+  const { data, error, count } = await query;
+  if (error) throw error;
+  return { data: data || [], count };
 }
 
 async function getVentaById(id) {

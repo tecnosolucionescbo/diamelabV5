@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cargar tasa BCV
     await actualizarDisplayTasa('#tasa-bcv');
 
-    // Cargar estadísticas
+    // Cargar estadísticas usando la función optimizada de API
     await cargarEstadisticas();
 
     // Cargar ventas recientes
@@ -47,65 +47,23 @@ function updateUserAvatar() {
 }
 
 /**
- * Carga las estadísticas del dashboard
+ * Carga las estadísticas del dashboard usando getDashboardStats()
  */
 async function cargarEstadisticas() {
     try {
-        // Obtener todas las ventas según permisos (usando la nueva paginación)
-        const { data: ventas, count } = await getVentas({}, null, 0);
+        const stats = await getDashboardStats();
         
-        // Calcular estadísticas
-        let totalVentas = 0;
-        let totalPagado = 0;
-        let ventasPendientes = 0;
-        let ventasPagadas = 0;
-        let ventasParciales = 0;
-        let ventasAnuladas = 0;
-
-        // IDs de ventas no anuladas para calcular pagos
-        const ventasActivasIds = [];
-
-        ventas.forEach(v => {
-            const monto = parseFloat(v.monto_total_usd) || 0;
-            
-            if (v.estado !== 'anulada') {
-                totalVentas += monto;
-                ventasActivasIds.push(v.id);
-            }
-
-            if (v.estado === 'pendiente') ventasPendientes++;
-            if (v.estado === 'pagada') ventasPagadas++;
-            if (v.estado === 'parcial') ventasParciales++;
-            if (v.estado === 'anulada') ventasAnuladas++;
-        });
-
-        // Obtener pagos de ventas activas
-        if (ventasActivasIds.length > 0) {
-            const { data: pagos, error } = await supabaseClient
-                .from('pagos')
-                .select('monto_pagado_usd, venta_id')
-                .in('venta_id', ventasActivasIds);
-            
-            if (!error && pagos) {
-                pagos.forEach(p => {
-                    totalPagado += parseFloat(p.monto_pagado_usd) || 0;
-                });
-            }
-        }
-
-        const totalPendiente = totalVentas - totalPagado;
-
         // Actualizar DOM
-        document.getElementById('stat-total-ventas').textContent = formatUSD(totalVentas);
-        document.getElementById('stat-total-pagado').textContent = formatUSD(totalPagado);
-        document.getElementById('stat-total-pendiente').textContent = formatUSD(Math.max(0, totalPendiente));
-        document.getElementById('stat-pendientes-count').textContent = ventasPendientes;
+        document.getElementById('stat-total-ventas').textContent = formatUSD(stats.totalVentas);
+        document.getElementById('stat-total-pagado').textContent = formatUSD(stats.totalPagado);
+        document.getElementById('stat-total-pendiente').textContent = formatUSD(Math.max(0, stats.totalPendiente));
+        document.getElementById('stat-pendientes-count').textContent = stats.ventasPendientes;
 
         // Resumen por estado
-        document.getElementById('res-pendientes').textContent = ventasPendientes;
-        document.getElementById('res-parciales').textContent = ventasParciales;
-        document.getElementById('res-pagadas').textContent = ventasPagadas;
-        document.getElementById('res-anuladas').textContent = ventasAnuladas;
+        document.getElementById('res-pendientes').textContent = stats.ventasPendientes;
+        document.getElementById('res-parciales').textContent = stats.ventasParciales;
+        document.getElementById('res-pagadas').textContent = stats.ventasPagadas;
+        document.getElementById('res-anuladas').textContent = stats.ventasAnuladas;
 
     } catch (error) {
         console.error('Error cargando estadísticas:', error);

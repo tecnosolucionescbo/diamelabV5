@@ -51,8 +51,8 @@ function updateUserAvatar() {
  */
 async function cargarEstadisticas() {
     try {
-        // Obtener todas las ventas según permisos
-        const ventas = await getVentas({});
+        // Obtener todas las ventas según permisos (usando la nueva paginación)
+        const { data: ventas, count } = await getVentas({}, null, 0);
         
         // Calcular estadísticas
         let totalVentas = 0;
@@ -81,7 +81,6 @@ async function cargarEstadisticas() {
 
         // Obtener pagos de ventas activas
         if (ventasActivasIds.length > 0) {
-            // Usar la API de pagos
             const { data: pagos, error } = await supabaseClient
                 .from('pagos')
                 .select('monto_pagado_usd, venta_id')

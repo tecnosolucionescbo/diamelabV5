@@ -15,7 +15,7 @@
                 <img src="assets/logo-diamelab.jpg" alt="Diamelab">
                 <div>
                     <div class="brand-text">Diamelab</div>
-                    <div class="brand-tagline">Sistema de Gestión</div>
+                    <div class="brand-tagline">Sistema de Gestion</div>
                 </div>
             </div>
 
@@ -41,12 +41,12 @@
                 </div>
 
                 <div class="nav-section admin-only">
-                    <div class="nav-section-title">Administración</div>
-                    <a href="#" class="nav-link" onclick="showAlert('Módulo en desarrollo','info'); return false;">
+                    <div class="nav-section-title">Administracion</div>
+                    <a href="#" class="nav-link" onclick="showAlert('Modulo en desarrollo','info'); return false;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                         Usuarios
                     </a>
-                    <a href="#" class="nav-link" onclick="showAlert('Módulo en desarrollo','info'); return false;">
+                    <a href="#" class="nav-link" onclick="showAlert('Modulo en desarrollo','info'); return false;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                         Clientes
                     </a>
@@ -67,13 +67,14 @@
                 </a>
                 <a href="#" class="nav-link" id="btn-logout" style="color: var(--danger);">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                    Cerrar Sesión
+                    Cerrar Sesion
                 </a>
             </div>
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- Topbar -->
             <header class="topbar">
                 <div class="topbar-left">
                     <button class="menu-toggle" id="menu-toggle">
@@ -92,7 +93,9 @@
                 </div>
             </header>
 
+            <!-- Content -->
             <div class="content-area">
+                <!-- Toolbar -->
                 <div class="toolbar">
                     <div class="toolbar-filters">
                         <input type="text" id="filtro-busqueda" class="form-control" placeholder="Buscar por A2 o cliente..." style="min-width: 250px;">
@@ -105,9 +108,9 @@
                         </select>
                         <select id="filtro-sede" class="form-control form-select admin-only" style="display: none;">
                             <option value="">Todas las sedes</option>
-                            <option value="Ciudad Bolivar">Ciudad Bolívar</option>
+                            <option value="Ciudad Bolivar">Ciudad Bolivar</option>
                             <option value="Ciudad Guayana">Ciudad Guayana</option>
-                            <option value="Maturin">Maturín</option>
+                            <option value="Maturin">Maturin</option>
                         </select>
                         <input type="date" id="filtro-fecha-desde" class="form-control" title="Desde">
                         <input type="date" id="filtro-fecha-hasta" class="form-control" title="Hasta">
@@ -122,16 +125,17 @@
                     </div>
                 </div>
 
+                <!-- Tabla de Ventas -->
                 <div class="card">
                     <div class="card-body" style="padding: 0;">
-                        <div class="table-container" id="contenedor-tabla">
+                        <div class="table-container">
                             <table class="table" id="tabla-ventas">
                                 <thead>
                                     <tr>
                                         <th>Correlativo A2</th>
                                         <th>Cliente</th>
                                         <th>Sede</th>
-                                        <th>Fecha Emisión</th>
+                                        <th>Fecha Emision</th>
                                         <th>Vencimiento</th>
                                         <th>Monto USD</th>
                                         <th>Estado</th>
@@ -163,11 +167,12 @@
             </div>
             <div class="modal-body">
                 <form id="form-venta">
+                    <!-- Fila 1: Correlativo A2 y Cliente -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label">Correlativo A2 <span class="required">*</span></label>
                             <input type="text" id="v-correlacion" class="form-control" placeholder="Ej: NE-000001" required>
-                            <div class="form-text">Número de nota del sistema A2 (obligatorio)</div>
+                            <div class="form-text">Numero de nota del sistema A2 (obligatorio)</div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Cliente <span class="required">*</span></label>
@@ -179,25 +184,29 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Fila 2: Fechas -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                         <div class="form-group">
-                            <label class="form-label">Fecha de Emisión <span class="required">*</span></label>
+                            <label class="form-label">Fecha de Emision <span class="required">*</span></label>
                             <input type="date" id="v-fecha-emision" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Fecha de Vencimiento <span class="required">*</span></label>
                             <input type="date" id="v-fecha-vencimiento" class="form-control" required>
-                            <div class="form-text">Máximo 15 días de crédito</div>
+                            <div class="form-text">Maximo 15 dias de credito</div>
                         </div>
                     </div>
+
+                    <!-- Fila 3: Sede y Tasa -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label">Sede <span class="required">*</span></label>
                             <select id="v-sede" class="form-control form-select" required>
                                 <option value="">Seleccionar...</option>
-                                <option value="Ciudad Bolivar">Ciudad Bolívar</option>
+                                <option value="Ciudad Bolivar">Ciudad Bolivar</option>
                                 <option value="Ciudad Guayana">Ciudad Guayana</option>
-                                <option value="Maturin">Maturín</option>
+                                <option value="Maturin">Maturin</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -208,6 +217,8 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Fila 4: Monto Total -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label">Monto Total (USD) <span class="required">*</span></label>
@@ -215,13 +226,15 @@
                                 <span class="input-group-text">$</span>
                                 <input type="number" id="v-monto-total" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
                             </div>
-                            <div class="form-text">Monto total de la nota en dólares</div>
+                            <div class="form-text">Monto total de la nota en dolares</div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Equivalencia en Bs.</label>
                             <input type="text" id="v-monto-bs" class="form-control" disabled style="font-weight: 700; color: var(--diamelab-primary);">
                         </div>
                     </div>
+
+                    <!-- Items de Venta (OPCIONALES) -->
                     <div class="form-group" style="margin-bottom: var(--space-md);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-sm);">
                             <label class="form-label" style="margin-bottom: 0;">Productos / Items <span style="font-weight: 400; color: var(--gray-400);">(Opcional)</span></label>
@@ -229,8 +242,8 @@
                         </div>
                         <div class="items-container" id="items-container" style="display: none;">
                             <div class="items-header">
-                                <span>Código</span>
-                                <span>Descripción</span>
+                                <span>Codigo</span>
+                                <span>Descripcion</span>
                                 <span>Cant.</span>
                                 <span>Precio Unit. USD</span>
                                 <span>Total USD</span>
@@ -239,6 +252,8 @@
                             <div id="items-list"></div>
                         </div>
                     </div>
+
+                    <!-- Notas -->
                     <div class="form-group">
                         <label class="form-label">Notas / Observaciones</label>
                         <textarea id="v-notas" class="form-control" rows="2" placeholder="Observaciones opcionales..."></textarea>
@@ -262,8 +277,8 @@
             <div class="modal-body">
                 <form id="form-cliente">
                     <div class="form-group">
-                        <label class="form-label">Razón Social <span class="required">*</span></label>
-                        <input type="text" id="c-razon" class="form-control" placeholder="Nombre o razón social" required>
+                        <label class="form-label">Razon Social <span class="required">*</span></label>
+                        <input type="text" id="c-razon" class="form-control" placeholder="Nombre o razon social" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">RIF <span class="required">*</span></label>
@@ -271,12 +286,12 @@
                         <div class="form-text">Formato: J-12345678-9</div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Dirección</label>
-                        <input type="text" id="c-direccion" class="form-control" placeholder="Dirección fiscal (opcional)">
+                        <label class="form-label">Direccion</label>
+                        <input type="text" id="c-direccion" class="form-control" placeholder="Direccion fiscal (opcional)">
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md);">
                         <div class="form-group">
-                            <label class="form-label">Teléfono</label>
+                            <label class="form-label">Telefono</label>
                             <input type="text" id="c-telefono" class="form-control" placeholder="02XX-XXXXXXX">
                         </div>
                         <div class="form-group">
@@ -310,240 +325,11 @@
         </div>
     </div>
 
-    <!-- Scripts originales (no se modifican) -->
+    <!-- Scripts -->
     <script src="js/supabase-config.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/api.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/ventas.js"></script>
-
-    <!-- 🔥 BLOQUE DE CARGA INFINITA (NO TOCA LOS .JS) 🔥 -->
-    <script>
-    (function() {
-        // Esperamos a que todo el DOM y los scripts anteriores se hayan ejecutado
-        document.addEventListener('DOMContentLoaded', function() {
-            // -----------------------------------------------------------------
-            // 1. Configuración de paginación
-            // -----------------------------------------------------------------
-            const TAMANO_PAGINA = 30;
-            let paginaActual = 0;
-            let hayMasRegistros = true;
-            let cargando = false;
-
-            const tbody = document.getElementById('tbody-ventas');
-            const contenedor = document.getElementById('contenedor-tabla');
-
-            // -----------------------------------------------------------------
-            // 2. Función para mostrar/ocultar spinner de carga al final
-            // -----------------------------------------------------------------
-            function mostrarSpinner() {
-                const tr = document.createElement('tr');
-                tr.id = 'fila-spinner';
-                tr.innerHTML = `<td colspan="8" style="text-align:center; padding:1rem;">
-                    <div class="spinner" style="border-color: var(--gray-200); border-top-color: var(--diamelab-primary);"></div>
-                    Cargando más...
-                </td>`;
-                tbody.appendChild(tr);
-            }
-
-            function quitarSpinner() {
-                const spinner = document.getElementById('fila-spinner');
-                if (spinner) spinner.remove();
-            }
-
-            // -----------------------------------------------------------------
-            // 3. Obtener filtros actuales desde los inputs
-            // -----------------------------------------------------------------
-            function obtenerFiltros() {
-                const busqueda = document.getElementById('filtro-busqueda').value.trim();
-                const estado = document.getElementById('filtro-estado').value;
-                const sede = document.getElementById('filtro-sede').value;
-                const fechaDesde = document.getElementById('filtro-fecha-desde').value;
-                const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
-                return { busqueda, estado, sede, fechaDesde, fechaHasta };
-            }
-
-            // -----------------------------------------------------------------
-            // 4. Renderizar una fila de la tabla
-            // -----------------------------------------------------------------
-            function crearFila(venta) {
-                const tr = document.createElement('tr');
-                // Adapta los nombres de las columnas según tu tabla real
-                const correlativo = venta.correlativo_a2 || venta.correlativoA2 || '';
-                const cliente = venta.cliente_nombre || venta.clienteNombre || venta.cliente || '';
-                const sede = venta.sede || '';
-                const fechaEmision = venta.fecha_emision ? new Date(venta.fecha_emision).toLocaleDateString('es-VE') : '';
-                const vencimiento = venta.fecha_vencimiento ? new Date(venta.fecha_vencimiento).toLocaleDateString('es-VE') : '';
-                const monto = venta.monto_total_usd ? parseFloat(venta.monto_total_usd).toFixed(2) : '0.00';
-                const estado = venta.estado || 'pendiente';
-                const id = venta.id;
-
-                tr.innerHTML = `
-                    <td>${correlativo}</td>
-                    <td>${cliente}</td>
-                    <td>${sede}</td>
-                    <td>${fechaEmision}</td>
-                    <td>${vencimiento}</td>
-                    <td>$${monto}</td>
-                    <td><span class="badge badge-${estado.toLowerCase()}">${estado}</span></td>
-                    <td>
-                        <button class="btn-accion ver" data-id="${id}" title="Ver detalle">👁</button>
-                        <!-- Puedes agregar más botones como editar, anular, etc. -->
-                    </td>
-                `;
-
-                // Si necesitas eventos para los botones de acción, se pueden delegar
-                // desde el tbody (ya implementado en ventas.js normalmente).
-                return tr;
-            }
-
-            // -----------------------------------------------------------------
-            // 5. Función principal de carga paginada (reemplaza a la original)
-            // -----------------------------------------------------------------
-            async function cargarVentas(pagina = 0, reiniciar = false) {
-                if (cargando) return;
-                if (!hayMasRegistros && !reiniciar) return;
-
-                // Si es una nueva búsqueda (filtros cambiaron), limpiamos la tabla
-                if (reiniciar) {
-                    tbody.innerHTML = '';
-                    paginaActual = 0;
-                    hayMasRegistros = true;
-                    // Si ya había un spinner, lo quitamos
-                    quitarSpinner();
-                }
-
-                cargando = true;
-                mostrarSpinner();
-
-                try {
-                    const filtros = obtenerFiltros();
-                    const desde = paginaActual * TAMANO_PAGINA;
-                    const hasta = desde + TAMANO_PAGINA - 1;
-
-                    // Construir la query base (ajusta el nombre de la tabla)
-                    let query = supabase
-                        .from('notas_entrega')   // ⚠️ Cambia si tu tabla tiene otro nombre
-                        .select('*', { count: 'exact' });
-
-                    // Aplicar filtros
-                    if (filtros.busqueda) {
-                        // Busca en correlativo A2 o nombre de cliente
-                        query = query.or(`correlativo_a2.ilike.%${filtros.busqueda}%,cliente_nombre.ilike.%${filtros.busqueda}%`);
-                    }
-                    if (filtros.estado) {
-                        query = query.eq('estado', filtros.estado);
-                    }
-                    if (filtros.sede) {
-                        query = query.eq('sede', filtros.sede);
-                    }
-                    if (filtros.fechaDesde) {
-                        query = query.gte('fecha_emision', filtros.fechaDesde);
-                    }
-                    if (filtros.fechaHasta) {
-                        query = query.lte('fecha_emision', filtros.fechaHasta);
-                    }
-
-                    // Orden y rango
-                    query = query.order('fecha_emision', { ascending: false })
-                                 .range(desde, hasta);
-
-                    const { data, error, count } = await query;
-
-                    if (error) throw error;
-
-                    if (data && data.length > 0) {
-                        data.forEach(venta => {
-                            tbody.appendChild(crearFila(venta));
-                        });
-                        paginaActual = pagina + 1;
-                        // Si devolvió menos del tamaño de página, no hay más
-                        hayMasRegistros = data.length === TAMANO_PAGINA;
-                    } else {
-                        hayMasRegistros = false;
-                        if (reiniciar) {
-                            // Si no hay resultados en la primera carga, mostrar mensaje
-                            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:2rem;">No se encontraron notas de entrega.</td></tr>`;
-                        }
-                    }
-
-                    // Si no hay más registros, eliminamos el spinner y opcionalmente mostramos un mensaje
-                    if (!hayMasRegistros) {
-                        quitarSpinner();
-                    }
-                } catch (error) {
-                    console.error('Error al cargar notas:', error);
-                    if (typeof showAlert === 'function') {
-                        showAlert('Error al cargar las notas de entrega', 'error');
-                    }
-                    quitarSpinner();
-                } finally {
-                    cargando = false;
-                }
-            }
-
-            // -----------------------------------------------------------------
-            // 6. Sobrescribir la función global original (si existe)
-            //    Para que cualquier llamada desde ventas.js use la paginada
-            // -----------------------------------------------------------------
-            window.cargarVentasOriginal = window.cargarVentas; // respaldo por si acaso
-            window.cargarVentas = function(pagina, reiniciar) {
-                // Si se llama sin argumentos (como antes), forzamos reinicio
-                if (typeof pagina === 'undefined') {
-                    return cargarVentas(0, true);
-                }
-                return cargarVentas(pagina, reiniciar);
-            };
-
-            // -----------------------------------------------------------------
-            // 7. Configurar el scroll infinito en el contenedor de la tabla
-            // -----------------------------------------------------------------
-            if (contenedor) {
-                contenedor.addEventListener('scroll', function() {
-                    const { scrollTop, scrollHeight, clientHeight } = contenedor;
-                    if (scrollTop + clientHeight >= scrollHeight - 200) {
-                        if (!cargando && hayMasRegistros) {
-                            cargarVentas(paginaActual, false);
-                        }
-                    }
-                });
-            }
-
-            // -----------------------------------------------------------------
-            // 8. Conectar los botones de filtro/limpiar con la paginación
-            // -----------------------------------------------------------------
-            const btnFiltrar = document.getElementById('btn-filtrar');
-            const btnLimpiar = document.getElementById('btn-limpiar');
-
-            if (btnFiltrar) {
-                // Reemplazamos el listener original (si lo tenía) por uno que reinicia
-                btnFiltrar.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    cargarVentas(0, true);
-                });
-            }
-
-            if (btnLimpiar) {
-                btnLimpiar.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    // Limpiamos todos los filtros
-                    document.getElementById('filtro-busqueda').value = '';
-                    document.getElementById('filtro-estado').value = '';
-                    const sedeSel = document.getElementById('filtro-sede');
-                    if (sedeSel) sedeSel.value = '';
-                    document.getElementById('filtro-fecha-desde').value = '';
-                    document.getElementById('filtro-fecha-hasta').value = '';
-                    // Cargar de nuevo desde cero
-                    cargarVentas(0, true);
-                });
-            }
-
-            // -----------------------------------------------------------------
-            // 9. Carga inicial
-            // -----------------------------------------------------------------
-            cargarVentas(0, true);
-        });
-    })();
-    </script>
 </body>
 </html>

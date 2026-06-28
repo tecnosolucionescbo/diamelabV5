@@ -9,6 +9,7 @@ let ventasCache = [];
 let itemsTemp = [];
 let editingVentaId = null;
 let viewingVentaId = null;
+
 // Estado para paginación infinita
 let paginacion = {
   limit: 50,
@@ -20,37 +21,36 @@ let paginacion = {
 };
 let observer = null;
 
-// Después de initNavigation() y cargar datos...
-// Configurar observer para infinite scroll
-const observerTarget = document.createElement('tr');
-observerTarget.id = 'observer-target';
-observerTarget.innerHTML = `<td colspan="8" style="height: 20px;"></td>`;
-document.getElementById('tbody-ventas').appendChild(observerTarget);
-
-observer = new IntersectionObserver((entries) => {
-  if (entries[0].isIntersecting && !paginacion.cargando && !paginacion.fin) {
-    cargarVentas(false); // Cargar siguiente página
-  }
-}, { rootMargin: '0px 0px 100px 0px' });
-observer.observe(observerTarget);
-
-// Al aplicar filtros, reiniciar
-document.getElementById('btn-filtrar').addEventListener('click', () => {
-  cargarVentas(true);
-});
-document.getElementById('btn-limpiar').addEventListener('click', () => {
-  // Limpiar inputs de filtro
-  document.getElementById('filtro-busqueda').value = '';
-  document.getElementById('filtro-estado').value = '';
-  document.getElementById('filtro-fecha-desde').value = '';
-  document.getElementById('filtro-fecha-hasta').value = '';
-  if (document.getElementById('filtro-sede')) {
-    document.getElementById('filtro-sede').value = '';
-  }
-  cargarVentas(true);
-});
 // ============================================
 // INICIALIZACION
+// ============================================
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const isAuth = await protectRoute();
+    if (!isAuth) return;
+
+    initNavigation();
+    updateUserAvatarVentas();
+
+    // Cargar tasa BCV
+    await actualizarDisplayTasa('#tasa-bcv');
+
+    // Setup sede segun usuario
+    setupSedeUsuario();
+
+    // Cargar clientes y ventas
+    await cargarClientes();
+    await cargarVentas(true); // primera carga
+
+    // Configurar eventos
+    setupEventListeners();
+
+    // Configurar observer para infinite scroll
+    configurarObserver();
+});
+
+// ============================================
+// FUNCIONES AUXILIARES DE UI
 // ============================================
 
 function updateUserAvatarVentas() {
@@ -67,7 +67,6 @@ function setupSedeUsuario() {
     const sedeSelect = document.getElementById('v-sede');
     
     if (user.sede && user.sede !== 'Todas') {
-        // Preseleccionar sede del usuario
         sedeSelect.value = user.sede;
         if (!isAdmin()) {
             sedeSelect.disabled = true;
@@ -86,14 +85,18 @@ function setupSedeUsuario() {
     document.getElementById('v-fecha-vencimiento').value = calcularVencimiento(hoy);
 }
 
+// ============================================
+// CONFIGURAR EVENTOS
+// ============================================
+
 function setupEventListeners() {
     // Filtros
-    document.getElementById('btn-filtrar').addEventListener('click', aplicarFiltros);
+    document.getElementById('btn-filtrar').addEventListener('click', () => cargarVentas(true));
     document.getElementById('btn-limpiar').addEventListener('click', limpiarFiltros);
-    document.getElementById('filtro-busqueda').addEventListener('input', debounce(aplicarFiltros, 300));
-    document.getElementById('filtro-estado').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-busqueda').addEventListener('input', debounce(() => cargarVentas(true), 400));
+    document.getElementById('filtro-estado').addEventListener('change', () => cargarVentas(true));
     const filtroSede = document.getElementById('filtro-sede');
-    if (filtroSede) filtroSede.addEventListener('change', aplicarFiltros);
+    if (filtroSede) filtroSede.addEventListener('change', () => cargarVentas(true));
 
     // Modal venta
     document.getElementById('btn-nueva-venta').addEventListener('click', abrirModalNuevaVenta);
@@ -168,105 +171,196 @@ function actualizarSelectClientes() {
 }
 
 // ============================================
-// CARGAR VENTAS
+// CARGAR VENTAS (con infinite scroll)
 // ============================================
 
 async function cargarVentas(reiniciar = true) {
-  if (reiniciar) {
-    paginacion.offset = 0;
-    paginacion.fin = false;
-    document.getElementById('tbody-ventas').innerHTML = ''; // Limpiar
-  }
-
-  if (paginacion.cargando || paginacion.fin) return;
-  paginacion.cargando = true;
-
-  // Mostrar indicador de carga al final
-  mostrarCargaInfinita(true);
-
-  try {
-    const filtros = obtenerFiltros();
-    paginacion.filtrosActuales = filtros;
-
-    const { data, count } = await getVentas(
-      filtros,
-      paginacion.limit,
-      paginacion.offset
-    );
-
     if (reiniciar) {
-      paginacion.total = count;
-      // Limpiar tabla
-      document.getElementById('tbody-ventas').innerHTML = '';
+        paginacion.offset = 0;
+        paginacion.fin = false;
+        // Limpiar tabla pero conservar el observer-target y el indicador de carga
+        const tbody = document.getElementById('tbody-ventas');
+        const observerTarget = document.getElementById('observer-target');
+        const indicador = document.getElementById('carga-infinita-indicador');
+        tbody.innerHTML = '';
+        if (observerTarget) tbody.appendChild(observerTarget);
+        if (indicador) {
+            tbody.appendChild(indicador);
+            indicador.style.display = 'none';
+        }
     }
 
-    if (data.length === 0) {
-      paginacion.fin = true;
-      if (paginacion.offset === 0) {
-        // No hay datos
-        document.getElementById('tbody-ventas').innerHTML = `
-          <tr><td colspan="8">
-            <div class="empty-state">
-              <div class="empty-state-icon">📄</div>
-              <h3>Sin notas de entrega</h3>
-              <p>No se encontraron notas con los filtros aplicados.</p>
-            </div>
-          </td></tr>
-        `;
-      }
-      mostrarCargaInfinita(false);
-      paginacion.cargando = false;
-      return;
-    }
+    if (paginacion.cargando || paginacion.fin) return;
+    paginacion.cargando = true;
 
-    // Renderizar las filas añadiendo al final
-    const tbody = document.getElementById('tbody-ventas');
-    // Si es la primera carga y no hay datos, mostrar mensaje
-    if (reiniciar && data.length === 0) {
-      tbody.innerHTML = `
-        <tr><td colspan="8">
-          <div class="empty-state">
-            <div class="empty-state-icon">📄</div>
-            <h3>Sin notas de entrega</h3>
-            <p>No se encontraron notas con los filtros aplicados.</p>
-          </div>
-        </td></tr>
-      `;
-    } else {
-      // Agregar nuevas filas
-      const nuevasFilas = data.map(v => generarFilaVenta(v)).join('');
-      tbody.insertAdjacentHTML('beforeend', nuevasFilas);
-    }
+    // Mostrar indicador de carga al final
+    mostrarCargaInfinita(true);
 
-    paginacion.offset += data.length;
-    paginacion.fin = paginacion.offset >= paginacion.total;
+    try {
+        const filtros = obtenerFiltros();
+        paginacion.filtrosActuales = filtros;
 
-    // Si no hay más, ocultar indicador
-    if (paginacion.fin) {
-      mostrarCargaInfinita(false);
-    }
+        const { data, count } = await getVentas(
+            filtros,
+            paginacion.limit,
+            paginacion.offset
+        );
 
-  } catch (error) {
-    console.error('Error cargando ventas:', error);
-    showAlert('Error al cargar las notas de entrega', 'error');
-  } finally {
-    paginacion.cargando = false;
-    if (!paginacion.fin) {
-      // Mantener indicador de carga si hay más
-      mostrarCargaInfinita(true);
-    } else {
-      mostrarCargaInfinita(false);
+        if (reiniciar) {
+            paginacion.total = count;
+        }
+
+        if (data.length === 0) {
+            paginacion.fin = true;
+            if (paginacion.offset === 0) {
+                // No hay datos
+                const tbody = document.getElementById('tbody-ventas');
+                tbody.innerHTML = `
+                    <tr><td colspan="8">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📄</div>
+                            <h3>Sin notas de entrega</h3>
+                            <p>No se encontraron notas con los filtros aplicados.</p>
+                        </div>
+                    </td></tr>
+                `;
+            }
+            mostrarCargaInfinita(false);
+            paginacion.cargando = false;
+            return;
+        }
+
+        // Agregar nuevas filas antes del observer-target
+        const tbody = document.getElementById('tbody-ventas');
+        const observerTarget = document.getElementById('observer-target');
+        const nuevasFilas = data.map(v => generarFilaVenta(v)).join('');
+
+        if (observerTarget) {
+            observerTarget.insertAdjacentHTML('beforebegin', nuevasFilas);
+        } else {
+            tbody.insertAdjacentHTML('beforeend', nuevasFilas);
+        }
+
+        paginacion.offset += data.length;
+        paginacion.fin = paginacion.offset >= paginacion.total;
+
+        // Si no hay más, ocultar indicador
+        if (paginacion.fin) {
+            mostrarCargaInfinita(false);
+        }
+
+    } catch (error) {
+        console.error('Error cargando ventas:', error);
+        showAlert('Error al cargar las notas de entrega', 'error');
+    } finally {
+        paginacion.cargando = false;
+        if (!paginacion.fin) {
+            mostrarCargaInfinita(true);
+        } else {
+            mostrarCargaInfinita(false);
+        }
     }
-  }
 }
 
-document.getElementById('filtro-busqueda').addEventListener('input', debounce(() => {
-  cargarVentas(true);
-}, 400));
+function obtenerFiltros() {
+    const estado = document.getElementById('filtro-estado').value;
+    const sede = document.getElementById('filtro-sede').value;
+    const fechaDesde = document.getElementById('filtro-fecha-desde').value;
+    const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
+    const busqueda = document.getElementById('filtro-busqueda').value.trim();
 
-function aplicarFiltros() {
-    cargarVentas();
+    const filtros = {};
+    if (estado) filtros.estado = estado;
+    if (sede) filtros.sede = sede;
+    if (fechaDesde) filtros.fecha_desde = fechaDesde;
+    if (fechaHasta) filtros.fecha_hasta = fechaHasta;
+    if (busqueda) filtros.busqueda = busqueda;
+    return filtros;
 }
+
+function generarFilaVenta(v) {
+    const badgeClass = {
+        'pendiente': 'badge-pendiente', 'parcial': 'badge-parcial',
+        'pagada': 'badge-pagada', 'anulada': 'badge-anulada'
+    }[v.estado] || 'badge-pendiente';
+
+    const estadoText = { 'pendiente': 'Pendiente', 'parcial': 'Parcial', 'pagada': 'Pagada', 'anulada': 'Anulada' }[v.estado] || v.estado;
+    const clienteNombre = v.cliente ? v.cliente.razon_social : 'N/A';
+
+    const today = new Date();
+    const vencimiento = new Date(v.fecha_vencimiento);
+    const diasRestantes = Math.ceil((vencimiento - today) / (1000 * 60 * 60 * 24));
+    const vencimientoClass = diasRestantes < 0 ? 'text-danger' : diasRestantes <= 3 ? 'text-warning' : '';
+    const vencText = diasRestantes < 0 ? 'Vencido' : `${diasRestantes}d`;
+
+    return `
+        <tr>
+            <td><strong>${v.correlacion_a2 || 'N/A'}</strong></td>
+            <td>${clienteNombre}</td>
+            <td>${v.sede || 'N/A'}</td>
+            <td>${formatDate(v.fecha_emision)}</td>
+            <td class="${vencimientoClass}">${formatDate(v.fecha_vencimiento)} <small>(${vencText})</small></td>
+            <td><strong>${formatUSD(v.monto_total_usd)}</strong></td>
+            <td><span class="badge ${badgeClass}">${estadoText}</span></td>
+            <td>
+                <button class="btn btn-sm btn-ghost" onclick="verVenta('${v.id}')" title="Ver detalle">👁️</button>
+                ${v.estado !== 'anulada' ? `<button class="btn btn-sm btn-ghost" onclick="registrarPago('${v.id}')" title="Registrar pago">💰</button>` : ''}
+                ${isAdmin() || v.estado === 'pendiente' ? `<button class="btn btn-sm btn-ghost" onclick="anularVentaConfirm('${v.id}')" title="Anular">🚫</button>` : ''}
+            </td>
+        </tr>
+    `;
+}
+
+function mostrarCargaInfinita(mostrar) {
+    let indicador = document.getElementById('carga-infinita-indicador');
+    if (!indicador) {
+        indicador = document.createElement('tr');
+        indicador.id = 'carga-infinita-indicador';
+        indicador.innerHTML = `<td colspan="8" style="text-align: center; padding: 1rem;">
+            <div class="spinner" style="border-color: var(--gray-200); border-top-color: var(--diamelab-primary);"></div>
+            <p style="margin-top: 0.5rem; color: var(--gray-400);">Cargando más notas...</p>
+        </td>`;
+        // Insertar al final del tbody
+        const tbody = document.getElementById('tbody-ventas');
+        const observerTarget = document.getElementById('observer-target');
+        if (observerTarget) {
+            observerTarget.before(indicador);
+        } else {
+            tbody.appendChild(indicador);
+        }
+    }
+    indicador.style.display = mostrar ? '' : 'none';
+}
+
+// ============================================
+// CONFIGURAR OBSERVER PARA INFINITE SCROLL
+// ============================================
+
+function configurarObserver() {
+    // Crear elemento observer-target si no existe
+    let target = document.getElementById('observer-target');
+    if (!target) {
+        target = document.createElement('tr');
+        target.id = 'observer-target';
+        target.innerHTML = `<td colspan="8" style="height: 20px;"></td>`;
+        const tbody = document.getElementById('tbody-ventas');
+        tbody.appendChild(target);
+    }
+
+    // Desconectar observer previo si existe
+    if (observer) observer.disconnect();
+
+    observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !paginacion.cargando && !paginacion.fin) {
+            cargarVentas(false); // Cargar siguiente página
+        }
+    }, { rootMargin: '0px 0px 100px 0px' });
+    observer.observe(target);
+}
+
+// ============================================
+// LIMPIAR FILTROS
+// ============================================
 
 function limpiarFiltros() {
     document.getElementById('filtro-busqueda').value = '';
@@ -275,7 +369,7 @@ function limpiarFiltros() {
     document.getElementById('filtro-fecha-hasta').value = '';
     const filtroSede = document.getElementById('filtro-sede');
     if (filtroSede) filtroSede.value = '';
-    cargarVentas();
+    cargarVentas(true);
 }
 
 // ============================================
@@ -448,7 +542,7 @@ async function guardarVenta() {
         hideLoading('#btn-guardar-venta');
         showAlert('Nota de entrega creada exitosamente', 'success');
         cerrarModalVenta();
-        await cargarVentas();
+        await cargarVentas(true);
 
     } catch (error) {
         hideLoading('#btn-guardar-venta');
@@ -460,73 +554,6 @@ async function guardarVenta() {
             showAlert('Error al guardar la nota de entrega: ' + error.message, 'error');
         }
     }
-}
-
-
-function obtenerFiltros() {
-  const estado = document.getElementById('filtro-estado').value;
-  const sede = document.getElementById('filtro-sede').value;
-  const fechaDesde = document.getElementById('filtro-fecha-desde').value;
-  const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
-  const busqueda = document.getElementById('filtro-busqueda').value.toLowerCase().trim();
-
-  const filtros = {};
-  if (estado) filtros.estado = estado;
-  if (sede) filtros.sede = sede;
-  if (fechaDesde) filtros.fecha_desde = fechaDesde;
-  if (fechaHasta) filtros.fecha_hasta = fechaHasta;
-  // La búsqueda se maneja localmente (opcional), pero mejor pasarla al backend
-  if (busqueda) filtros.busqueda = busqueda;
-  return filtros;
-}
-
-function generarFilaVenta(v) {
-  const badgeClass = {
-    'pendiente': 'badge-pendiente', 'parcial': 'badge-parcial',
-    'pagada': 'badge-pagada', 'anulada': 'badge-anulada'
-  }[v.estado] || 'badge-pendiente';
-
-  const estadoText = { 'pendiente': 'Pendiente', 'parcial': 'Parcial', 'pagada': 'Pagada', 'anulada': 'Anulada' }[v.estado] || v.estado;
-  const clienteNombre = v.cliente ? v.cliente.razon_social : 'N/A';
-
-  const today = new Date();
-  const vencimiento = new Date(v.fecha_vencimiento);
-  const diasRestantes = Math.ceil((vencimiento - today) / (1000 * 60 * 60 * 24));
-  const vencimientoClass = diasRestantes < 0 ? 'text-danger' : diasRestantes <= 3 ? 'text-warning' : '';
-  const vencText = diasRestantes < 0 ? `Vencido` : `${diasRestantes}d`;
-
-  return `
-    <tr>
-      <td><strong>${v.correlacion_a2 || 'N/A'}</strong></td>
-      <td>${clienteNombre}</td>
-      <td>${v.sede || 'N/A'}</td>
-      <td>${formatDate(v.fecha_emision)}</td>
-      <td class="${vencimientoClass}">${formatDate(v.fecha_vencimiento)} <small>(${vencText})</small></td>
-      <td><strong>${formatUSD(v.monto_total_usd)}</strong></td>
-      <td><span class="badge ${badgeClass}">${estadoText}</span></td>
-      <td>
-        <button class="btn btn-sm btn-ghost" onclick="verVenta('${v.id}')" title="Ver detalle">👁️</button>
-        ${v.estado !== 'anulada' ? `<button class="btn btn-sm btn-ghost" onclick="registrarPago('${v.id}')" title="Registrar pago">💰</button>` : ''}
-        ${isAdmin() || v.estado === 'pendiente' ? `<button class="btn btn-sm btn-ghost" onclick="anularVentaConfirm('${v.id}')" title="Anular">🚫</button>` : ''}
-      </td>
-    </tr>
-  `;
-}
-
-function mostrarCargaInfinita(mostrar) {
-  let indicador = document.getElementById('carga-infinita-indicador');
-  if (!indicador) {
-    indicador = document.createElement('tr');
-    indicador.id = 'carga-infinita-indicador';
-    indicador.innerHTML = `<td colspan="8" style="text-align: center; padding: 1rem;">
-      <div class="spinner" style="border-color: var(--gray-200); border-top-color: var(--diamelab-primary);"></div>
-      <p style="margin-top: 0.5rem; color: var(--gray-400);">Cargando más notas...</p>
-    </td>`;
-    // Insertar al final del tbody
-    const tbody = document.getElementById('tbody-ventas');
-    tbody.appendChild(indicador);
-  }
-  indicador.style.display = mostrar ? '' : 'none';
 }
 
 // ============================================
@@ -647,7 +674,7 @@ window.anularVentaConfirm = async function(ventaId) {
     try {
         await anularVenta(ventaId);
         showAlert('Nota de entrega anulada correctamente', 'success');
-        await cargarVentas();
+        await cargarVentas(true);
     } catch (error) {
         console.error('Error anulando venta:', error);
         showAlert('Error al anular la nota de entrega', 'error');

@@ -2,61 +2,89 @@
  * Módulo de Clientes - Solo Administrador
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  const isAuth = await protectRoute();
-  if (!isAuth) return;
+  console.log('✅ clientes.js: DOM cargado');
 
-  initNavigation();
-  updateUserAvatar();
+  try {
+    console.log('🔍 Verificando autenticación...');
+    const isAuth = await protectRoute();
+    if (!isAuth) {
+      console.warn('⛔ No autenticado, redirigiendo...');
+      return;
+    }
+    console.log('✅ Autenticación OK');
 
-  if (!isAdmin()) {
-    showAlert('Acceso denegado. Se requieren permisos de administrador.', 'error');
-    setTimeout(() => window.location.href = 'dashboard.html', 1500);
-    return;
-  }
+    initNavigation();
+    updateUserAvatar();
 
-  await actualizarDisplayTasa('#tasa-bcv');
-  await cargarClientes();
+    if (!isAdmin()) {
+      console.warn('⛔ No es administrador');
+      showAlert('Acceso denegado. Se requieren permisos de administrador.', 'error');
+      setTimeout(() => window.location.href = 'dashboard.html', 1500);
+      return;
+    }
+    console.log('✅ Es administrador');
 
-  // Eventos
-  document.getElementById('btn-nuevo-cliente').addEventListener('click', () => abrirModalCliente());
-  document.getElementById('btn-cerrar-modal-cliente').addEventListener('click', cerrarModalCliente);
-  document.getElementById('btn-cancelar-cliente').addEventListener('click', cerrarModalCliente);
-  document.getElementById('btn-guardar-cliente').addEventListener('click', guardarCliente);
-  document.getElementById('btn-filtrar-clientes').addEventListener('click', cargarClientes);
-  document.getElementById('btn-limpiar-clientes').addEventListener('click', () => {
-    document.getElementById('filtro-cliente').value = '';
-    cargarClientes();
-  });
-  document.getElementById('filtro-cliente').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') cargarClientes();
-  });
-  document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
-    invalidateTasaCache();
+    console.log('🔍 Cargando tasa BCV...');
     await actualizarDisplayTasa('#tasa-bcv');
-  });
+    console.log('✅ Tasa BCV cargada');
 
-  document.getElementById('modal-cliente').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) cerrarModalCliente();
-  });
+    console.log('🔍 Cargando clientes...');
+    await cargarClientes();
+    console.log('✅ Clientes cargados');
+
+    // Eventos
+    document.getElementById('btn-nuevo-cliente').addEventListener('click', () => abrirModalCliente());
+    document.getElementById('btn-cerrar-modal-cliente').addEventListener('click', cerrarModalCliente);
+    document.getElementById('btn-cancelar-cliente').addEventListener('click', cerrarModalCliente);
+    document.getElementById('btn-guardar-cliente').addEventListener('click', guardarCliente);
+    document.getElementById('btn-filtrar-clientes').addEventListener('click', cargarClientes);
+    document.getElementById('btn-limpiar-clientes').addEventListener('click', () => {
+      document.getElementById('filtro-cliente').value = '';
+      cargarClientes();
+    });
+    document.getElementById('filtro-cliente').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') cargarClientes();
+    });
+    document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
+      invalidateTasaCache();
+      await actualizarDisplayTasa('#tasa-bcv');
+    });
+
+    document.getElementById('modal-cliente').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) cerrarModalCliente();
+    });
+
+  } catch (error) {
+    console.error('❌ Error en inicialización:', error);
+    showAlert('Error al inicializar la página: ' + error.message, 'error');
+  }
 });
 
 let clientesCache = [];
 
 async function cargarClientes() {
   const tbody = document.getElementById('tbody-clientes');
+  if (!tbody) {
+    console.error('❌ No se encontró el elemento tbody-clientes');
+    return;
+  }
+
   tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;"><div class="spinner"></div> Cargando...</td></tr>`;
 
   try {
-    const filtro = document.getElementById('filtro-cliente').value.trim();
-    const data = await getClientes(); // Ya tiene orden
-    clientesCache = data;
+    console.log('🔍 Obteniendo clientes desde Supabase...');
+    const data = await getClientes();
+    console.log('📊 Clientes obtenidos:', data?.length || 0, 'registros');
+    clientesCache = data || [];
 
+    const filtro = document.getElementById('filtro-cliente').value.trim();
     let filtrados = data;
     if (filtro) {
       filtrados = data.filter(c => 
         c.razon_social.toLowerCase().includes(filtro.toLowerCase()) ||
         c.rif.toLowerCase().includes(filtro.toLowerCase())
       );
+      console.log('🔍 Filtrados:', filtrados.length, 'registros');
     }
 
     if (filtrados.length === 0) {
@@ -78,19 +106,20 @@ async function cargarClientes() {
       </tr>
     `).join('');
 
+    console.log('✅ Clientes renderizados correctamente');
+
   } catch (error) {
-    console.error('Error cargando clientes:', error);
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--danger);">Error al cargar clientes.</td></tr>`;
-    showAlert('Error al cargar clientes', 'error');
+    console.error('❌ Error cargando clientes:', error);
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--danger);">Error al cargar clientes: ${error.message}</td></tr>`;
+    showAlert('Error al cargar clientes: ' + error.message, 'error');
   }
 }
 
 function abrirModalCliente(cliente = null) {
   const modal = document.getElementById('modal-cliente');
   const titulo = document.getElementById('modal-cliente-titulo');
-  const form = document.getElementById('form-cliente');
 
-  form.reset();
+  document.getElementById('form-cliente').reset();
   document.getElementById('c-id').value = '';
 
   if (cliente) {

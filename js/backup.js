@@ -1,7 +1,17 @@
 /**
  * Módulo de Respaldo de Base de Datos
  * Solo para administradores
+ * Protegido por contraseña para módulos de descarga (SQL, JSON, CSV)
+ * Excel no requiere contraseña
  */
+
+// ============================================
+// CONFIGURACIÓN DE CONTRASEÑA
+// ============================================
+// CAMBIA ESTA CONTRASEÑA POR LA QUE DESEES
+const CONTRASENA_MAESTRA = 'Diamelab2026!';
+
+// ============================================
 
 document.addEventListener('DOMContentLoaded', async () => {
   const isAuth = await protectRoute();
@@ -18,28 +28,124 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await actualizarDisplayTasa('#tasa-bcv');
 
-  // Eventos existentes
-  document.getElementById('btn-backup-estructura').addEventListener('click', exportarEstructura);
+  // Eventos de los botones de descarga (protegidos)
+  document.getElementById('btn-backup-estructura').addEventListener('click', () => solicitarPassword('estructura'));
 
-  document.getElementById('btn-backup-json-completo').addEventListener('click', () => exportarJSON('completo'));
-  document.getElementById('btn-backup-json-clientes').addEventListener('click', () => exportarJSON('clientes'));
-  document.getElementById('btn-backup-json-ventas').addEventListener('click', () => exportarJSON('ventas'));
-  document.getElementById('btn-backup-json-pagos').addEventListener('click', () => exportarJSON('pagos'));
-  document.getElementById('btn-backup-json-usuarios').addEventListener('click', () => exportarJSON('profiles'));
+  document.getElementById('btn-backup-json-completo').addEventListener('click', () => solicitarPassword('json-completo'));
+  document.getElementById('btn-backup-json-clientes').addEventListener('click', () => solicitarPassword('json-clientes'));
+  document.getElementById('btn-backup-json-ventas').addEventListener('click', () => solicitarPassword('json-ventas'));
+  document.getElementById('btn-backup-json-pagos').addEventListener('click', () => solicitarPassword('json-pagos'));
+  document.getElementById('btn-backup-json-usuarios').addEventListener('click', () => solicitarPassword('json-usuarios'));
 
-  document.getElementById('btn-backup-csv-clientes').addEventListener('click', () => exportarCSV('clientes'));
-  document.getElementById('btn-backup-csv-ventas').addEventListener('click', () => exportarCSV('ventas'));
-  document.getElementById('btn-backup-csv-pagos').addEventListener('click', () => exportarCSV('pagos'));
-  document.getElementById('btn-backup-csv-usuarios').addEventListener('click', () => exportarCSV('profiles'));
+  document.getElementById('btn-backup-csv-clientes').addEventListener('click', () => solicitarPassword('csv-clientes'));
+  document.getElementById('btn-backup-csv-ventas').addEventListener('click', () => solicitarPassword('csv-ventas'));
+  document.getElementById('btn-backup-csv-pagos').addEventListener('click', () => solicitarPassword('csv-pagos'));
+  document.getElementById('btn-backup-csv-usuarios').addEventListener('click', () => solicitarPassword('csv-usuarios'));
 
-  // NUEVO: Exportar Excel con notas, pagos y facturas
+  // Excel NO está protegido
   document.getElementById('btn-exportar-excel-completo').addEventListener('click', exportarExcelCompleto);
 
   document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
     invalidateTasaCache();
     await actualizarDisplayTasa('#tasa-bcv');
   });
+
+  // Eventos del modal de contraseña
+  document.getElementById('btn-cerrar-password').addEventListener('click', cerrarModalPassword);
+  document.getElementById('btn-cancelar-password').addEventListener('click', cerrarModalPassword);
+  document.getElementById('btn-verificar-password').addEventListener('click', verificarPassword);
+  document.getElementById('input-password').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') verificarPassword();
+  });
+  document.getElementById('modal-password').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) cerrarModalPassword();
+  });
 });
+
+// ============================================
+// VARIABLES PARA LA CONTRASEÑA
+// ============================================
+let accionPendiente = null; // Guarda qué acción ejecutar después de verificar la contraseña
+
+// ============================================
+// FUNCIONES DEL MODAL DE CONTRASEÑA
+// ============================================
+
+function solicitarPassword(accion) {
+  accionPendiente = accion;
+  document.getElementById('input-password').value = '';
+  document.getElementById('password-error').style.display = 'none';
+  document.getElementById('modal-password').style.display = 'flex';
+  setTimeout(() => document.getElementById('input-password').focus(), 100);
+}
+
+function cerrarModalPassword() {
+  document.getElementById('modal-password').style.display = 'none';
+  accionPendiente = null;
+}
+
+function verificarPassword() {
+  const input = document.getElementById('input-password').value;
+  const errorEl = document.getElementById('password-error');
+
+  if (input === CONTRASENA_MAESTRA) {
+    // Contraseña correcta
+    errorEl.style.display = 'none';
+    cerrarModalPassword();
+
+    // Ejecutar la acción pendiente
+    if (accionPendiente) {
+      ejecutarAccion(accionPendiente);
+      accionPendiente = null;
+    }
+  } else {
+    // Contraseña incorrecta
+    errorEl.style.display = 'block';
+    document.getElementById('input-password').value = '';
+    document.getElementById('input-password').focus();
+  }
+}
+
+// ============================================
+// EJECUTAR ACCIÓN SEGÚN EL BOTÓN PRESIONADO
+// ============================================
+
+function ejecutarAccion(accion) {
+  switch (accion) {
+    case 'estructura':
+      exportarEstructura();
+      break;
+    case 'json-completo':
+      exportarJSON('completo');
+      break;
+    case 'json-clientes':
+      exportarJSON('clientes');
+      break;
+    case 'json-ventas':
+      exportarJSON('ventas');
+      break;
+    case 'json-pagos':
+      exportarJSON('pagos');
+      break;
+    case 'json-usuarios':
+      exportarJSON('profiles');
+      break;
+    case 'csv-clientes':
+      exportarCSV('clientes');
+      break;
+    case 'csv-ventas':
+      exportarCSV('ventas');
+      break;
+    case 'csv-pagos':
+      exportarCSV('pagos');
+      break;
+    case 'csv-usuarios':
+      exportarCSV('profiles');
+      break;
+    default:
+      console.warn('Acción desconocida:', accion);
+  }
+}
 
 // ============================================
 // FUNCIONES AUXILIARES
@@ -160,7 +266,7 @@ async function exportarCSV(tabla) {
 }
 
 // ============================================
-// 4. NUEVO: EXPORTAR NOTAS CON PAGOS Y FACTURAS EN EXCEL
+// 4. EXPORTAR NOTAS CON PAGOS Y FACTURAS EN EXCEL (SIN CONTRASEÑA)
 // ============================================
 
 async function exportarExcelCompleto() {
@@ -170,7 +276,6 @@ async function exportarExcelCompleto() {
 
     mostrarStatus(`Exportando notas con pagos y facturas (${nombreSede})...`, 'info');
 
-    // Obtener datos
     const ventas = await getVentasCompletasConPagos(sede);
 
     if (!ventas || ventas.length === 0) {
@@ -178,15 +283,11 @@ async function exportarExcelCompleto() {
       return;
     }
 
-    // Preparar hojas
     const hojaNotas = [];
     const hojaPagos = [];
     const hojaFacturas = [];
-    const resumen = {};
 
-    // Recorrer ventas
     ventas.forEach(v => {
-      // Hoja Notas
       const cliente = v.cliente || {};
       hojaNotas.push({
         'Correlativo A2': v.correlacion_a2 || '',
@@ -206,7 +307,6 @@ async function exportarExcelCompleto() {
         'Notas': v.notas || ''
       });
 
-      // Hoja Pagos
       if (v.pagos && v.pagos.length > 0) {
         v.pagos.forEach(p => {
           hojaPagos.push({
@@ -224,7 +324,6 @@ async function exportarExcelCompleto() {
         });
       }
 
-      // Hoja Facturas (resumen por nota)
       if (v.numero_factura) {
         hojaFacturas.push({
           'Correlativo A2': v.correlacion_a2 || '',
@@ -239,22 +338,17 @@ async function exportarExcelCompleto() {
       }
     });
 
-    // Crear libro Excel
     const wb = XLSX.utils.book_new();
 
-    // Hoja Notas
     const wsNotas = XLSX.utils.json_to_sheet(hojaNotas);
     XLSX.utils.book_append_sheet(wb, wsNotas, 'Notas');
 
-    // Hoja Pagos
     const wsPagos = XLSX.utils.json_to_sheet(hojaPagos);
     XLSX.utils.book_append_sheet(wb, wsPagos, 'Pagos');
 
-    // Hoja Facturas
     const wsFacturas = XLSX.utils.json_to_sheet(hojaFacturas);
     XLSX.utils.book_append_sheet(wb, wsFacturas, 'Facturas');
 
-    // Hoja Resumen (totales por sede)
     const totalBase = hojaNotas.reduce((s, r) => s + (r['Monto Base (USD)'] || 0), 0);
     const totalIVA = hojaNotas.reduce((s, r) => s + (r['IVA (USD)'] || 0), 0);
     const totalFacturado = hojaNotas.reduce((s, r) => s + (r['Total con IVA (USD)'] || 0), 0);
@@ -276,7 +370,6 @@ async function exportarExcelCompleto() {
     const wsResumen = XLSX.utils.json_to_sheet(resumenData);
     XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
 
-    // Generar archivo Excel
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);

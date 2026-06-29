@@ -3,15 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Imprimir Orden de Entrega - Diamelab</title>
+    <title>Imprimir Orden de Entrega</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* ===== ESTILOS PARA PANTALLA E IMPRESIÓN ===== */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin:0; padding:0; box-sizing:border-box; }
         body {
             font-family: 'Segoe UI', 'Arial', sans-serif;
             background: #f0f2f5;
@@ -21,7 +16,6 @@
             align-items: center;
             min-height: 100vh;
         }
-
         .orden-wrapper {
             background: #fff;
             width: 100%;
@@ -30,285 +24,20 @@
             border-radius: 8px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.12);
         }
-
-        /* --- ENCABEZADO --- */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            border-bottom: 2px solid #1a237e;
-            padding-bottom: 12px;
-            margin-bottom: 16px;
-        }
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .header-left img {
-            width: 70px;
-            height: auto;
-        }
-        .empresa h1 {
-            font-size: 20px;
-            color: #1a237e;
-            font-weight: 700;
-            margin: 0;
-            letter-spacing: 0.5px;
-        }
-        .empresa .slogan {
-            font-size: 11px;
-            color: #4b5563;
-            font-weight: 500;
-            letter-spacing: 0.3px;
-        }
-        .empresa .rif {
-            font-size: 11px;
-            color: #6b7280;
-            font-weight: 600;
-        }
-        .header-right {
-            text-align: right;
-        }
-        .header-right .titulo-orden {
-            font-size: 22px;
-            font-weight: 700;
-            color: #1a237e;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin: 0;
-        }
-        .header-right .numero-orden {
-            font-size: 18px;
-            font-weight: 700;
-            color: #111827;
-            background: #eef2f6;
-            padding: 2px 18px;
-            border-radius: 4px;
-            display: inline-block;
-            margin-top: 2px;
-        }
-
-        /* --- INFORMACIÓN CLIENTE Y FECHAS --- */
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 14px;
-            font-size: 13px;
-            line-height: 1.6;
-            padding: 10px 14px;
-            background: #f9fafb;
-            border-radius: 6px;
-            border-left: 4px solid #1a237e;
-        }
-        .info-cliente p {
-            margin: 1px 0;
-        }
-        .info-cliente strong {
-            color: #1a237e;
-        }
-        .info-fechas {
-            text-align: right;
-            white-space: nowrap;
-        }
-        .info-fechas p {
-            margin: 1px 0;
-        }
-
-        /* --- TABLA DE PRODUCTOS (estilo A2) --- */
-        .tabla-orden {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12.5px;
-            margin: 14px 0 10px 0;
-            border: 1px solid #d1d5db;
-        }
-        .tabla-orden thead {
-            background: #1a237e;
-            color: #fff;
-        }
-        .tabla-orden th {
-            padding: 8px 10px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            border: 1px solid #1a237e;
-        }
-        .tabla-orden td {
-            padding: 7px 10px;
-            border: 1px solid #d1d5db;
-            vertical-align: middle;
-        }
-        .tabla-orden .text-right {
-            text-align: right;
-        }
-        .tabla-orden .text-center {
-            text-align: center;
-        }
-
-        /* --- TOTALES --- */
-        .totales {
-            display: flex;
-            justify-content: flex-end;
-            gap: 40px;
-            font-size: 14px;
-            padding: 8px 0;
-            border-top: 2px solid #e5e7eb;
-            margin-top: 6px;
-        }
-        .totales .col {
-            text-align: right;
-        }
-        .totales .col .label {
-            color: #4b5563;
-            font-weight: 500;
-            font-size: 13px;
-        }
-        .totales .col .valor {
-            font-weight: 700;
-            font-size: 18px;
-            color: #1a237e;
-        }
-        .totales .col .valor-bs {
-            font-weight: 700;
-            font-size: 16px;
-            color: #4CAF50;
-        }
-
-        /* --- TASA Y PIE --- */
-        .tasa-info {
-            text-align: right;
-            margin-top: 8px;
-            font-size: 13px;
-            color: #1f2937;
-            font-weight: 500;
-            padding: 4px 0;
-        }
-        .tasa-info span {
-            background: #f3f4f6;
-            padding: 3px 14px;
-            border-radius: 4px;
-        }
-        .notas {
-            margin-top: 18px;
-            padding: 10px 14px;
-            background: #f9fafb;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #374151;
-            border-left: 3px solid #f59e0b;
-        }
-        .notas p {
-            margin: 2px 0;
-        }
-        .notas .texto-fijo {
-            font-weight: 600;
-            color: #1a237e;
-        }
-
-        .pie-fiscal {
-            margin-top: 20px;
-            padding-top: 10px;
-            border-top: 1px dashed #d1d5db;
-            font-size: 10px;
-            color: #6b7280;
-            text-align: center;
-            line-height: 1.6;
-        }
-        .pie-fiscal .destacado {
-            font-weight: 600;
-            color: #4b5563;
-        }
-
-        /* --- BOTONES (solo pantalla) --- */
-        .acciones-print {
-            text-align: center;
-            margin-top: 25px;
-        }
-        .acciones-print button {
-            padding: 8px 24px;
-            margin: 0 8px;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-        .btn-imprimir {
-            background: #1a237e;
-            color: #fff;
-        }
-        .btn-imprimir:hover {
-            background: #0d1642;
-        }
-        .btn-cerrar {
-            background: #e5e7eb;
-            color: #1f2937;
-        }
-        .btn-cerrar:hover {
-            background: #d1d5db;
-        }
-
-        /* ===== ESTILOS PARA IMPRESIÓN ===== */
         @media print {
-            body {
-                background: #fff;
-                padding: 0;
-                margin: 0;
-                display: block;
-            }
-            .orden-wrapper {
-                box-shadow: none;
-                border: none;
-                padding: 15px 25px;
-                max-width: 100%;
-                border-radius: 0;
-            }
-            .acciones-print {
-                display: none !important;
-            }
-            .tabla-orden thead {
-                background: #1a237e !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .tabla-orden th {
-                color: #fff !important;
-            }
-            .info-row {
-                background: #f9fafb !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .notas {
-                background: #f9fafb !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .tasa-info span {
-                background: #f3f4f6 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .header-left img {
-                width: 60px;
-            }
-            .header-right .numero-orden {
-                background: #eef2f6 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
+            body { background: #fff; padding:0; margin:0; display:block; }
+            .orden-wrapper { box-shadow:none; border:none; padding:15px 25px; max-width:100%; border-radius:0; }
+            .no-print { display:none !important; }
+            .tabla-orden thead { background: #1a237e !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .tabla-orden th { color: #fff !important; }
+            .info-row { background: #f9fafb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .notas { background: #f9fafb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .tasa-info span { background: #f3f4f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
     </style>
 </head>
 <body>
-    <div class="orden-wrapper" id="orden-wrapper">
-        <!-- El contenido se llena desde imprimir-orden.js -->
-    </div>
-
+    <div class="orden-wrapper" id="orden-wrapper"></div>
     <script src="js/supabase-config.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/api.js"></script>

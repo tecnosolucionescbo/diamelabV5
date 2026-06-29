@@ -285,18 +285,14 @@ async function anularVenta(id) {
 // ============================================
 
 async function deleteVenta(id) {
-    // Verificar si tiene pagos asociados
     const { count, error: countError } = await supabaseClient
         .from('pagos')
         .select('*', { count: 'exact', head: true })
         .eq('venta_id', id);
     if (countError) throw countError;
-
     if (count > 0) {
         throw new Error(`La venta tiene ${count} pagos asociados. Debe eliminarlos primero.`);
     }
-
-    // Eliminar la venta (en cascada eliminará venta_items si está configurado)
     const { error } = await supabaseClient
         .from('ventas')
         .delete()
@@ -355,6 +351,21 @@ async function createPago(pagoData, comprobanteFile = null, retIVAFile = null, r
     const { data, error } = await supabaseClient
         .from('pagos')
         .insert([pagoData])
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+// ============================================
+// ACTUALIZAR VALIDACIÓN DE PAGO (NUEVO)
+// ============================================
+
+async function actualizarValidacionPago(pagoId, validado) {
+    const { data, error } = await supabaseClient
+        .from('pagos')
+        .update({ validado: validado })
+        .eq('id', pagoId)
         .select()
         .single();
     if (error) throw error;
@@ -565,10 +576,11 @@ window.getVentaById = getVentaById;
 window.createVenta = createVenta;
 window.updateVenta = updateVenta;
 window.anularVenta = anularVenta;
-window.deleteVenta = deleteVenta; // <-- NUEVA FUNCIÓN
+window.deleteVenta = deleteVenta;
 window.getPagosByVenta = getPagosByVenta;
 window.getAllPagos = getAllPagos;
 window.createPago = createPago;
+window.actualizarValidacionPago = actualizarValidacionPago; // NUEVA
 window.uploadFile = uploadFile;
 window.deleteFile = deleteFile;
 window.getDashboardStats = getDashboardStats;

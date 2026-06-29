@@ -306,6 +306,7 @@ function generarFilaVenta(v) {
                 <button class="btn btn-sm btn-ghost" onclick="verVenta('${v.id}')" title="Ver detalle">👁️</button>
                 <button class="btn btn-sm btn-ghost" onclick="imprimirOrden('${v.id}')" title="Imprimir orden" style="color:var(--diamelab-primary);">🖨️</button>
                 ${v.estado !== 'anulada' ? `<button class="btn btn-sm btn-ghost" onclick="registrarPago('${v.id}')" title="Registrar pago">💰</button>` : ''}
+                ${isAdmin() ? `<button class="btn btn-sm btn-ghost" onclick="eliminarVentaConfirm('${v.id}')" title="Eliminar permanentemente" style="color:var(--danger);" id="btn-eliminar-venta-${v.id}">🗑️</button>` : ''}
                 ${isAdmin() || v.estado === 'pendiente' ? `<button class="btn btn-sm btn-ghost" onclick="anularVentaConfirm('${v.id}')" title="Anular">🚫</button>` : ''}
             </td>
         </tr>
@@ -558,7 +559,7 @@ async function guardarVenta() {
 }
 
 // ============================================
-// VER VENTA (CORREGIDO - REASIGNA EVENTO VER PAGOS)
+// VER VENTA (CON BOTÓN VER PAGOS CORREGIDO)
 // ============================================
 
 window.verVenta = async function(ventaId) {
@@ -663,7 +664,7 @@ window.verVenta = async function(ventaId) {
             // Re-asignar evento al botón Cerrar
             document.getElementById('btn-cerrar-ver').addEventListener('click', cerrarModalVerVenta);
 
-            // 🔥 RE-ASIGNAR EVENTO AL BOTÓN "VER PAGOS"
+            // Re-asignar evento al botón "Ver Pagos"
             document.getElementById('btn-ver-pagos').addEventListener('click', (e) => {
                 e.preventDefault();
                 if (viewingVentaId) {
@@ -702,6 +703,81 @@ window.anularVentaConfirm = async function(ventaId) {
     } catch (error) {
         console.error('Error anulando venta:', error);
         showAlert('Error al anular la nota de entrega', 'error');
+    }
+};
+
+// ============================================
+// ELIMINAR VENTA (SOLO ADMIN, PERMANENTE)
+// ============================================
+
+window.eliminarVentaConfirm = async function(ventaId) {
+    // Solo admin
+    if (!isAdmin()) {
+        showAlert('Solo los administradores pueden eliminar notas de entrega.', 'error');
+        return;
+    }
+
+    // Confirmación fuerte
+    const confirmado = await confirmAction(
+        '⚠️ ¿Está SEGURO de eliminar esta nota de entrega? Esta acción es PERMANENTE y no se puede deshacer. ' +
+        'Se eliminarán todos los datos relacionados (ítems y pagos).'
+    );
+    if (!confirmado) return;
+
+    try {
+        // Mostrar loading en el botón específico
+        const btn = document.getElementById('btn-eliminar-venta-' + ventaId);
+        if (btn) {
+            btn.textContent = '⏳';
+            btn.disabled = true;
+        }
+
+        // Verificar si tiene pagos
+        const { data: pagos, error: pError } = await supabaseClient
+            .from('pagos')
+            .select('id')
+            .eq('venta_id', ventaId);
+        if (pError) throw pError;
+
+        if (pagos && pagos.length > 0) {
+            const confirmarPagos = await confirmAction(
+                `⚠️ Esta nota tiene ${pagos.length} pago(s) registrados. ¿Desea eliminarlos también y continuar?`
+            );
+            if (!confirmarPagos) {
+                if (btn) {
+                    btn.textContent = '🗑️';
+                    btn.disabled = false;
+                }
+                return;
+            }
+            // Eliminar pagos manualmente
+            for (const pago of pagos) {
+                const { error: delPago } = await supabaseClient
+                    .from('pagos')
+                    .delete()
+                    .eq('id', pago.id);
+                if (delPago) throw delPago;
+            }
+        }
+
+        // Eliminar la venta
+        await deleteVenta(ventaId);
+
+        if (btn) {
+            btn.textContent = '✅';
+            btn.disabled = false;
+        }
+        showAlert('Nota de entrega eliminada permanentemente.', 'success');
+        await cargarVentas(true); // Recargar tabla
+
+    } catch (error) {
+        const btn = document.getElementById('btn-eliminar-venta-' + ventaId);
+        if (btn) {
+            btn.textContent = '🗑️';
+            btn.disabled = false;
+        }
+        console.error('Error eliminando venta:', error);
+        showAlert('Error al eliminar: ' + error.message, 'error');
     }
 };
 

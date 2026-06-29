@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes - Diamelab</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .reporte-resumen {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+        .reporte-card {
+            background: var(--white);
+            padding: var(--space-md);
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--diamelab-primary);
+            box-shadow: var(--shadow-sm);
+            text-align: center;
+        }
+        .reporte-card .numero {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--diamelab-primary);
+        }
+        .reporte-card .label {
+            font-size: 0.8125rem;
+            color: var(--gray-500);
+            margin-top: 4px;
+        }
+        .reporte-card.iva .numero { color: var(--warning); }
+        .reporte-card.facturado .numero { color: var(--success); }
+        .reporte-card.base .numero { color: var(--diamelab-primary); }
+        .reporte-card.pendiente .numero { color: var(--danger); }
+        .btn-exportar {
+            margin-top: var(--space-md);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar (igual que los demás) -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/logo-diamelab.jpg" alt="Diamelab">
+                <div>
+                    <div class="brand-text">Diamelab</div>
+                    <div class="brand-tagline">Sistema de Gestión</div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="dashboard.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        Dashboard
+                    </a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Operaciones</div>
+                    <a href="ventas.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Notas de Entrega
+                    </a>
+                    <a href="pagos.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                        Pagos
+                    </a>
+                </div>
+                <div class="nav-section admin-only">
+                    <div class="nav-section-title">Administración</div>
+                    <a href="usuarios.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        Usuarios
+                    </a>
+                    <a href="clientes.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        Clientes
+                    </a>
+                    <a href="backup.html" class="nav-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                        Respaldo
+                    </a>
+                    <a href="reportes.html" class="nav-link active">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        Reportes
+                    </a>
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-card">
+                    <div class="user-avatar" id="user-avatar">U</div>
+                    <div class="user-info">
+                        <div class="user-name">Cargando...</div>
+                        <div class="user-role">Cargando...</div>
+                    </div>
+                </div>
+                <a href="#" class="nav-link" id="btn-acerca">Acerca de</a>
+                <a href="#" class="nav-link" id="btn-logout" style="color: var(--danger);">Cerrar Sesión</a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menu-toggle">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <h1 class="page-title">Reportes de Ventas y Facturación</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="tasa-bcv-display" id="tasa-bcv"><span class="spinner-tasa"></span></div>
+                    <button class="topbar-btn" id="btn-refresh-tasa" title="Actualizar tasa BCV">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                    <span class="user-sede"></span>
+                </div>
+            </header>
+
+            <div class="content-area">
+                <!-- Filtros -->
+                <div class="card" style="margin-bottom: var(--space-lg);">
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--space-md); align-items: flex-end;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Sede</label>
+                                <select id="reporte-sede" class="form-control form-select">
+                                    <option value="">Todas</option>
+                                    <option value="Ciudad Bolivar">Ciudad Bolívar</option>
+                                    <option value="Ciudad Guayana">Ciudad Guayana</option>
+                                    <option value="Maturin">Maturín</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Fecha Desde</label>
+                                <input type="date" id="reporte-fecha-desde" class="form-control">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label class="form-label">Fecha Hasta</label>
+                                <input type="date" id="reporte-fecha-hasta" class="form-control">
+                            </div>
+                            <button class="btn btn-primary" id="btn-generar-reporte" style="margin-bottom: 0;">Generar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resumen -->
+                <div id="reporte-resumen" style="display: none;">
+                    <div class="reporte-resumen">
+                        <div class="reporte-card base">
+                            <div class="numero" id="total-base">$0.00</div>
+                            <div class="label">Total Notas (Base)</div>
+                        </div>
+                        <div class="reporte-card iva">
+                            <div class="numero" id="total-iva">$0.00</div>
+                            <div class="label">Total IVA (16%)</div>
+                        </div>
+                        <div class="reporte-card facturado">
+                            <div class="numero" id="total-facturado">$0.00</div>
+                            <div class="label">Total Facturado (con IVA)</div>
+                        </div>
+                        <div class="reporte-card pendiente">
+                            <div class="numero" id="total-pendiente-factura">0</div>
+                            <div class="label">Notas sin Facturar</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de detalle -->
+                <div class="card" id="reporte-detalle" style="display: none;">
+                    <div class="card-header">
+                        <h3>Detalle de Notas</h3>
+                        <button class="btn btn-sm btn-secondary btn-exportar" id="btn-exportar-csv">📊 Exportar CSV</button>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Nº Nota</th>
+                                        <th>Cliente</th>
+                                        <th>Sede</th>
+                                        <th>Fecha</th>
+                                        <th>Base (USD)</th>
+                                        <th>IVA (USD)</th>
+                                        <th>Total (USD)</th>
+                                        <th>Factura</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-reporte">
+                                    <tr><td colspan="8" style="text-align:center;padding:2rem;">Seleccione filtros y genere el reporte.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/supabase-config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/reportes.js"></script>
+</body>
+</html>

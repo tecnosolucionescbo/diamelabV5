@@ -2,72 +2,95 @@
  * Módulo de Usuarios - Solo Administrador
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  const isAuth = await protectRoute();
-  if (!isAuth) return;
+  console.log('✅ usuarios.js: DOM cargado');
 
-  initNavigation();
-  updateUserAvatar();
+  try {
+    console.log('🔍 Verificando autenticación...');
+    const isAuth = await protectRoute();
+    if (!isAuth) {
+      console.warn('⛔ No autenticado, redirigiendo...');
+      return;
+    }
+    console.log('✅ Autenticación OK');
 
-  // Verificar que sea admin
-  if (!isAdmin()) {
-    showAlert('Acceso denegado. Se requieren permisos de administrador.', 'error');
-    setTimeout(() => window.location.href = 'dashboard.html', 1500);
-    return;
-  }
+    initNavigation();
+    updateUserAvatar();
 
-  // Cargar tasa BCV
-  await actualizarDisplayTasa('#tasa-bcv');
+    if (!isAdmin()) {
+      console.warn('⛔ No es administrador');
+      showAlert('Acceso denegado. Se requieren permisos de administrador.', 'error');
+      setTimeout(() => window.location.href = 'dashboard.html', 1500);
+      return;
+    }
+    console.log('✅ Es administrador');
 
-  // Cargar usuarios
-  await cargarUsuarios();
-
-  // Eventos
-  document.getElementById('btn-nuevo-usuario').addEventListener('click', () => abrirModalUsuario());
-  document.getElementById('btn-cerrar-modal-usuario').addEventListener('click', cerrarModalUsuario);
-  document.getElementById('btn-cancelar-usuario').addEventListener('click', cerrarModalUsuario);
-  document.getElementById('btn-guardar-usuario').addEventListener('click', guardarUsuario);
-  document.getElementById('btn-filtrar-usuarios').addEventListener('click', cargarUsuarios);
-  document.getElementById('btn-limpiar-usuarios').addEventListener('click', () => {
-    document.getElementById('filtro-usuario').value = '';
-    cargarUsuarios();
-  });
-  document.getElementById('filtro-usuario').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') cargarUsuarios();
-  });
-  document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
-    invalidateTasaCache();
+    console.log('🔍 Cargando tasa BCV...');
     await actualizarDisplayTasa('#tasa-bcv');
-  });
+    console.log('✅ Tasa BCV cargada');
 
-  // Cerrar modal al hacer click fuera
-  document.getElementById('modal-usuario').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) cerrarModalUsuario();
-  });
+    console.log('🔍 Cargando usuarios...');
+    await cargarUsuarios();
+    console.log('✅ Usuarios cargados');
+
+    // Eventos
+    document.getElementById('btn-nuevo-usuario').addEventListener('click', () => abrirModalUsuario());
+    document.getElementById('btn-cerrar-modal-usuario').addEventListener('click', cerrarModalUsuario);
+    document.getElementById('btn-cancelar-usuario').addEventListener('click', cerrarModalUsuario);
+    document.getElementById('btn-guardar-usuario').addEventListener('click', guardarUsuario);
+    document.getElementById('btn-filtrar-usuarios').addEventListener('click', cargarUsuarios);
+    document.getElementById('btn-limpiar-usuarios').addEventListener('click', () => {
+      document.getElementById('filtro-usuario').value = '';
+      cargarUsuarios();
+    });
+    document.getElementById('filtro-usuario').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') cargarUsuarios();
+    });
+    document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
+      invalidateTasaCache();
+      await actualizarDisplayTasa('#tasa-bcv');
+    });
+
+    document.getElementById('modal-usuario').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) cerrarModalUsuario();
+    });
+
+  } catch (error) {
+    console.error('❌ Error en inicialización:', error);
+    showAlert('Error al inicializar la página: ' + error.message, 'error');
+  }
 });
 
 let usuariosCache = [];
 
 async function cargarUsuarios() {
   const tbody = document.getElementById('tbody-usuarios');
+  if (!tbody) {
+    console.error('❌ No se encontró el elemento tbody-usuarios');
+    return;
+  }
+
   tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;"><div class="spinner"></div> Cargando...</td></tr>`;
 
   try {
+    console.log('🔍 Obteniendo usuarios desde Supabase...');
     const filtro = document.getElementById('filtro-usuario').value.trim();
     const { data, count } = await getProfiles({ limit: 200, filtro });
-    usuariosCache = data;
+    console.log('📊 Usuarios obtenidos:', data?.length || 0, 'registros');
+    usuariosCache = data || [];
 
     if (!data || data.length === 0) {
       tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--gray-400);">No hay usuarios registrados.</td></tr>`;
       return;
     }
 
+    const roleLabels = {
+      'admin': 'Administrador',
+      'vendedor_bolivar': 'Vendedor - Ciudad Bolívar',
+      'vendedor_guayana': 'Vendedor - Ciudad Guayana',
+      'vendedor_maturin': 'Vendedor - Maturín'
+    };
+
     tbody.innerHTML = data.map(u => {
-      const roleLabels = {
-        'admin': 'Administrador',
-        'vendedor_bolivar': 'Vendedor - Ciudad Bolívar',
-        'vendedor_guayana': 'Vendedor - Ciudad Guayana',
-        'vendedor_maturin': 'Vendedor - Maturín'
-      };
       const activo = u.activo !== false;
       return `
         <tr>
@@ -84,19 +107,20 @@ async function cargarUsuarios() {
       `;
     }).join('');
 
+    console.log('✅ Usuarios renderizados correctamente');
+
   } catch (error) {
-    console.error('Error cargando usuarios:', error);
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--danger);">Error al cargar usuarios.</td></tr>`;
-    showAlert('Error al cargar usuarios', 'error');
+    console.error('❌ Error cargando usuarios:', error);
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--danger);">Error al cargar usuarios: ${error.message}</td></tr>`;
+    showAlert('Error al cargar usuarios: ' + error.message, 'error');
   }
 }
 
 function abrirModalUsuario(usuario = null) {
   const modal = document.getElementById('modal-usuario');
   const titulo = document.getElementById('modal-usuario-titulo');
-  const form = document.getElementById('form-usuario');
 
-  form.reset();
+  document.getElementById('form-usuario').reset();
   document.getElementById('u-id').value = '';
 
   if (usuario) {
@@ -155,12 +179,10 @@ async function guardarUsuario() {
     showLoading('#btn-guardar-usuario', 'Guardando...');
 
     if (id) {
-      // Editar perfil existente
       const activo = document.getElementById('u-estado').value === 'true';
       await updateProfile(id, { full_name: fullName, role, sede, activo });
       showAlert('Usuario actualizado correctamente', 'success');
     } else {
-      // Crear nuevo usuario
       if (!password || password.length < 6) {
         hideLoading('#btn-guardar-usuario');
         showAlert('La contraseña debe tener al menos 6 caracteres.', 'error');

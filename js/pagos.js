@@ -1,6 +1,7 @@
 /**
  * Sistema Diamelab - Modulo de Pagos
  * Registro de pagos con comprobantes, retenciones y métodos de Venezuela
+ * Incluye funcionalidad de validación de pagos
  */
 
 // Estado global
@@ -355,6 +356,7 @@ async function guardarPago() {
         const tasaUsada = parseFloat(document.getElementById('p-tasa').value);
         const referencia = document.getElementById('p-referencia').value.trim() || null;
         const banco = document.getElementById('p-banco').value.trim() || null;
+        const validado = document.getElementById('p-validado').checked;
 
         let errores = [];
         if (!fechaPago) errores.push('La fecha de pago es obligatoria');
@@ -387,7 +389,8 @@ async function guardarPago() {
             tasa_usada: tasaUsada,
             metodo_pago: metodoPago,
             referencia: referencia,
-            banco_origen: banco
+            banco_origen: banco,
+            validado: validado // <-- NUEVO CAMPO
         };
 
         // Archivos
@@ -420,11 +423,12 @@ function limpiarFormularioPago() {
     document.getElementById('p-ret-iva').value = '';
     document.getElementById('p-ret-islr').value = '';
     document.getElementById('p-monto-bs').value = '';
+    document.getElementById('p-validado').checked = false; // Limpiar checkbox
     // Mantener fecha y tasa
 }
 
 // ============================================
-// RENDERIZAR PAGOS
+// RENDERIZAR PAGOS (con columna Validado)
 // ============================================
 
 function renderizarPagos() {
@@ -432,7 +436,7 @@ function renderizarPagos() {
 
     if (!pagosCache || pagosCache.length === 0) {
         tbody.innerHTML = `
-            <tr><td colspan="8">
+            <tr><td colspan="9">
                 <div class="empty-state">
                     <div class="empty-state-icon">&#128178;</div>
                     <h3>Sin pagos registrados</h3>
@@ -442,6 +446,8 @@ function renderizarPagos() {
         `;
         return;
     }
+
+    const isAdminUser = isAdmin();
 
     tbody.innerHTML = pagosCache.map(p => {
         const metodoLabels = {
@@ -460,6 +466,19 @@ function renderizarPagos() {
         if (p.retencion_islr_url) comps.push(`<a href="${p.retencion_islr_url}" target="_blank" style="color: var(--diamelab-primary); font-weight: 500;">ISLR</a>`);
         if (comps.length > 0) comprobantesHtml = comps.join(' | ');
 
+        // Estado de validación
+        const validado = p.validado === true;
+        const badgeValidado = validado 
+            ? '<span class="badge badge-pagada">✅ Validado</span>' 
+            : '<span class="badge badge-pendiente">⏳ Pendiente</span>';
+
+        // Botón para cambiar validación (solo admin)
+        const btnValidar = isAdminUser 
+            ? `<button class="btn btn-sm ${validado ? 'btn-warning' : 'btn-success'}" onclick="toggleValidacionPago('${p.id}', ${validado})" title="${validado ? 'Desmarcar como validado' : 'Marcar como validado'}">
+                ${validado ? '↩️' : '✅'}
+               </button>`
+            : '';
+
         return `
             <tr>
                 <td>${formatDate(p.fecha_pago)}</td>
@@ -469,6 +488,10 @@ function renderizarPagos() {
                 <td>${p.banco_origen || '-'}</td>
                 <td>${formatNumber(p.tasa_usada, 4)}</td>
                 <td>${comprobantesHtml}</td>
+                <td style="text-align: center;">
+                    ${badgeValidado}
+                    <div style="margin-top: 4px;">${btnValidar}</div>
+                </td>
                 <td>${p.vendedor ? p.vendedor.full_name : 'N/A'}</td>
             </tr>
         `;
@@ -476,8 +499,35 @@ function renderizarPagos() {
 }
 
 // ============================================
+// TOGGLE VALIDACIÓN DE PAGO (NUEVA FUNCIÓN)
+// ============================================
+
+window.toggleValidacionPago = async function(pagoId, estadoActual) {
+    if (!isAdmin()) {
+        showAlert('Solo los administradores pueden validar pagos.', 'error');
+        return;
+    }
+
+    const nuevoEstado = !estadoActual;
+    const mensaje = nuevoEstado ? 'marcar como validado' : 'desmarcar como validado';
+    const confirmado = await confirmAction(`¿Está seguro de ${mensaje} este pago?`);
+    if (!confirmado) return;
+
+    try {
+        await actualizarValidacionPago(pagoId, nuevoEstado);
+        showAlert(`Pago ${nuevoEstado ? 'validado' : 'desmarcado'} correctamente.`, 'success');
+        // Recargar la lista de pagos
+        await seleccionarVenta(ventaSeleccionada.id);
+    } catch (error) {
+        console.error('Error actualizando validación:', error);
+        showAlert('Error al actualizar la validación: ' + error.message, 'error');
+    }
+};
+
+// ============================================
 // EXPORTAR FUNCIONES GLOBALES
 // ============================================
 window.seleccionarVenta = seleccionarVenta;
 window.buscarPorA2 = buscarPorA2;
 window.buscarPorCliente = buscarPorCliente;
+window.toggleValidacionPago = toggleValidacionPago;

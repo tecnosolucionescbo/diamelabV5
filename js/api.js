@@ -149,7 +149,7 @@ async function actualizarDisplayTasa(selector = '.tasa-bcv-display') {
 }
 
 // ============================================
-// CRUD DE CLIENTES (vía Supabase)
+// CRUD DE CLIENTES
 // ============================================
 
 async function getClientes() {
@@ -285,10 +285,6 @@ async function anularVenta(id) {
     return updateVenta(id, { estado: 'anulada' });
 }
 
-// ============================================
-// ELIMINAR VENTA (SOLO ADMIN)
-// ============================================
-
 async function deleteVenta(id) {
     const { count, error: countError } = await supabaseClient
         .from('pagos')
@@ -362,10 +358,6 @@ async function createPago(pagoData, comprobanteFile = null, retIVAFile = null, r
     return data;
 }
 
-// ============================================
-// ACTUALIZAR VALIDACIÓN DE PAGO
-// ============================================
-
 async function actualizarValidacionPago(pagoId, validado) {
     const { data, error } = await supabaseClient
         .from('pagos')
@@ -378,7 +370,7 @@ async function actualizarValidacionPago(pagoId, validado) {
 }
 
 // ============================================
-// FACTURACIÓN - ACTUALIZAR DATOS DE FACTURA
+// FACTURACIÓN
 // ============================================
 
 async function actualizarFacturaVenta(ventaId, numeroFactura, montoIva, fechaFactura) {
@@ -396,10 +388,6 @@ async function actualizarFacturaVenta(ventaId, numeroFactura, montoIva, fechaFac
     if (error) throw error;
     return data;
 }
-
-// ============================================
-// REPORTES - OBTENER VENTAS POR SEDE Y PERÍODO
-// ============================================
 
 async function getReporteVentas(sede, fechaDesde, fechaHasta) {
     let query = supabaseClient
@@ -419,16 +407,9 @@ async function getReporteVentas(sede, fechaDesde, fechaHasta) {
             cliente:clientes(razon_social, rif)
         `);
 
-    if (sede) {
-        query = query.eq('sede', sede);
-    }
-    if (fechaDesde) {
-        query = query.gte('fecha_emision', fechaDesde);
-    }
-    if (fechaHasta) {
-        query = query.lte('fecha_emision', fechaHasta);
-    }
-
+    if (sede) query = query.eq('sede', sede);
+    if (fechaDesde) query = query.gte('fecha_emision', fechaDesde);
+    if (fechaHasta) query = query.lte('fecha_emision', fechaHasta);
     query = query.neq('estado', 'anulada');
 
     const { data, error } = await query.order('fecha_emision', { ascending: false });
@@ -437,7 +418,7 @@ async function getReporteVentas(sede, fechaDesde, fechaHasta) {
 }
 
 // ============================================
-// STORAGE - SUBIR ARCHIVOS
+// STORAGE
 // ============================================
 
 async function uploadFile(file, bucket) {
@@ -463,62 +444,77 @@ async function deleteFile(bucket, path) {
 }
 
 // ============================================
-// DASHBOARD - ESTADÍSTICAS (OPTIMIZADO)
+// DASHBOARD
 // ============================================
 
 async function getDashboardStats() {
+    console.log('🔍 getDashboardStats() iniciada');
     const sede = isAdmin() ? null : getUserSede();
-    let ventasQuery = supabaseClient
-        .from('ventas')
-        .select('estado, monto_total_usd');
-    if (sede) ventasQuery = ventasQuery.eq('sede', sede);
-    const { data: ventas, error: vError } = await ventasQuery;
-    if (vError) throw vError;
+    console.log('🔍 Sede actual:', sede || 'Todas');
 
-    let pagosQuery = supabaseClient
-        .from('pagos')
-        .select('monto_pagado_usd, venta_id');
-    if (sede) {
-        const { data: ventasSede, error: vsError } = await supabaseClient
+    try {
+        console.log('🔍 Consultando ventas...');
+        let ventasQuery = supabaseClient
             .from('ventas')
-            .select('id')
-            .eq('sede', sede);
-        if (vsError) throw vsError;
-        const ids = ventasSede.map(v => v.id);
-        if (ids.length === 0) {
-            pagosQuery = pagosQuery.in('venta_id', []);
-        } else {
-            pagosQuery = pagosQuery.in('venta_id', ids);
+            .select('estado, monto_total_usd');
+        if (sede) ventasQuery = ventasQuery.eq('sede', sede);
+        const { data: ventas, error: vError } = await ventasQuery;
+        if (vError) throw vError;
+        console.log('✅ Ventas obtenidas:', ventas.length);
+
+        console.log('🔍 Consultando pagos...');
+        let pagosQuery = supabaseClient
+            .from('pagos')
+            .select('monto_pagado_usd, venta_id');
+        if (sede) {
+            const { data: ventasSede, error: vsError } = await supabaseClient
+                .from('ventas')
+                .select('id')
+                .eq('sede', sede)
+                .neq('estado', 'anulada');
+            if (vsError) throw vsError;
+            const ids = ventasSede.map(v => v.id);
+            if (ids.length === 0) {
+                pagosQuery = pagosQuery.in('venta_id', []);
+            } else {
+                pagosQuery = pagosQuery.in('venta_id', ids);
+            }
         }
+        const { data: pagos, error: pError } = await pagosQuery;
+        if (pError) throw pError;
+        console.log('✅ Pagos obtenidos:', pagos.length);
+
+        const stats = {
+            totalVentas: 0,
+            totalPagado: 0,
+            totalPendiente: 0,
+            ventasPendientes: 0,
+            ventasPagadas: 0,
+            ventasParciales: 0,
+            ventasAnuladas: 0
+        };
+
+        ventas.forEach(v => {
+            const monto = parseFloat(v.monto_total_usd) || 0;
+            stats.totalVentas += monto;
+            if (v.estado === 'pendiente') stats.ventasPendientes++;
+            if (v.estado === 'pagada') stats.ventasPagadas++;
+            if (v.estado === 'parcial') stats.ventasParciales++;
+            if (v.estado === 'anulada') stats.ventasAnuladas++;
+        });
+
+        pagos.forEach(p => {
+            stats.totalPagado += parseFloat(p.monto_pagado_usd) || 0;
+        });
+
+        stats.totalPendiente = stats.totalVentas - stats.totalPagado;
+        console.log('📊 Estadísticas calculadas:', stats);
+        return stats;
+
+    } catch (error) {
+        console.error('❌ Error en getDashboardStats:', error);
+        throw error;
     }
-    const { data: pagos, error: pError } = await pagosQuery;
-    if (pError) throw pError;
-
-    const stats = {
-        totalVentas: 0,
-        totalPagado: 0,
-        totalPendiente: 0,
-        ventasPendientes: 0,
-        ventasPagadas: 0,
-        ventasParciales: 0,
-        ventasAnuladas: 0
-    };
-
-    ventas.forEach(v => {
-        const monto = parseFloat(v.monto_total_usd) || 0;
-        stats.totalVentas += monto;
-        if (v.estado === 'pendiente') stats.ventasPendientes++;
-        if (v.estado === 'pagada') stats.ventasPagadas++;
-        if (v.estado === 'parcial') stats.ventasParciales++;
-        if (v.estado === 'anulada') stats.ventasAnuladas++;
-    });
-
-    pagos.forEach(p => {
-        stats.totalPagado += parseFloat(p.monto_pagado_usd) || 0;
-    });
-
-    stats.totalPendiente = stats.totalVentas - stats.totalPagado;
-    return stats;
 }
 
 async function getVentasRecientes(limit = 10) {
@@ -537,9 +533,9 @@ async function getVentasRecientes(limit = 10) {
     return data || [];
 }
 
-// ============================================================
-// CRUD DE PERFILES (USUARIOS) - SOLO ADMIN
-// ============================================================
+// ============================================
+// USUARIOS
+// ============================================
 
 async function getProfiles({ limit = 100, offset = 0, filtro = '' } = {}) {
     let query = supabaseClient
@@ -593,9 +589,9 @@ async function createUserWithProfile(email, password, fullName, role, sede) {
     return data;
 }
 
-// ============================================================
-// CRUD DE CLIENTES - ACTUALIZAR / ELIMINAR
-// ============================================================
+// ============================================
+// CLIENTES - ACTUALIZAR / ELIMINAR
+// ============================================
 
 async function updateCliente(id, updates) {
     const { data, error } = await supabaseClient

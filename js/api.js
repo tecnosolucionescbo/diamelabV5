@@ -222,6 +222,11 @@ async function getVentas(filtros = {}, limit = null, offset = 0) {
             query = query.ilike('correlacion_a2', `%${filtros.busqueda}%`);
         }
     }
+    if (filtros.facturado === true) {
+        query = query.not('numero_factura', 'is', null).neq('numero_factura', '');
+    } else if (filtros.facturado === false) {
+        query = query.or('numero_factura.is.null,numero_factura.eq.\\'\\'');
+    }
 
     query = query.order('fecha_emision', { ascending: false });
     if (limit !== null) {
@@ -358,7 +363,7 @@ async function createPago(pagoData, comprobanteFile = null, retIVAFile = null, r
 }
 
 // ============================================
-// ACTUALIZAR VALIDACIÓN DE PAGO (NUEVO)
+// ACTUALIZAR VALIDACIÓN DE PAGO
 // ============================================
 
 async function actualizarValidacionPago(pagoId, validado) {
@@ -370,6 +375,65 @@ async function actualizarValidacionPago(pagoId, validado) {
         .single();
     if (error) throw error;
     return data;
+}
+
+// ============================================
+// FACTURACIÓN - ACTUALIZAR DATOS DE FACTURA
+// ============================================
+
+async function actualizarFacturaVenta(ventaId, numeroFactura, montoIva, fechaFactura) {
+    const updates = {
+        numero_factura: numeroFactura || null,
+        monto_iva: montoIva || 0,
+        fecha_factura: fechaFactura || null
+    };
+    const { data, error } = await supabaseClient
+        .from('ventas')
+        .update(updates)
+        .eq('id', ventaId)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+}
+
+// ============================================
+// REPORTES - OBTENER VENTAS POR SEDE Y PERÍODO
+// ============================================
+
+async function getReporteVentas(sede, fechaDesde, fechaHasta) {
+    let query = supabaseClient
+        .from('ventas')
+        .select(`
+            id,
+            correlacion_a2,
+            fecha_emision,
+            fecha_vencimiento,
+            monto_total_usd,
+            monto_iva,
+            total_con_iva,
+            numero_factura,
+            fecha_factura,
+            estado,
+            sede,
+            cliente:clientes(razon_social, rif)
+        `);
+
+    if (sede) {
+        query = query.eq('sede', sede);
+    }
+    if (fechaDesde) {
+        query = query.gte('fecha_emision', fechaDesde);
+    }
+    if (fechaHasta) {
+        query = query.lte('fecha_emision', fechaHasta);
+    }
+
+    query = query.neq('estado', 'anulada');
+
+    const { data, error } = await query.order('fecha_emision', { ascending: false });
+    if (error) throw error;
+    return data || [];
 }
 
 // ============================================
@@ -580,7 +644,9 @@ window.deleteVenta = deleteVenta;
 window.getPagosByVenta = getPagosByVenta;
 window.getAllPagos = getAllPagos;
 window.createPago = createPago;
-window.actualizarValidacionPago = actualizarValidacionPago; // NUEVA
+window.actualizarValidacionPago = actualizarValidacionPago;
+window.actualizarFacturaVenta = actualizarFacturaVenta;
+window.getReporteVentas = getReporteVentas;
 window.uploadFile = uploadFile;
 window.deleteFile = deleteFile;
 window.getDashboardStats = getDashboardStats;

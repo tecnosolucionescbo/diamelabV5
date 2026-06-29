@@ -304,6 +304,7 @@ function generarFilaVenta(v) {
             <td><span class="badge ${badgeClass}">${estadoText}</span></td>
             <td>
                 <button class="btn btn-sm btn-ghost" onclick="verVenta('${v.id}')" title="Ver detalle">👁️</button>
+                <button class="btn btn-sm btn-ghost" onclick="imprimirOrden('${v.id}')" title="Imprimir orden" style="color:var(--diamelab-primary);">🖨️</button>
                 ${v.estado !== 'anulada' ? `<button class="btn btn-sm btn-ghost" onclick="registrarPago('${v.id}')" title="Registrar pago">💰</button>` : ''}
                 ${isAdmin() || v.estado === 'pendiente' ? `<button class="btn btn-sm btn-ghost" onclick="anularVentaConfirm('${v.id}')" title="Anular">🚫</button>` : ''}
             </td>
@@ -557,7 +558,7 @@ async function guardarVenta() {
 }
 
 // ============================================
-// VER VENTA
+// VER VENTA (con botón imprimir en modal)
 // ============================================
 
 window.verVenta = async function(ventaId) {
@@ -650,6 +651,18 @@ window.verVenta = async function(ventaId) {
             ${itemsHtml}
         `;
 
+        // Actualizar footer del modal con botón imprimir
+        const footer = document.querySelector('#modal-ver-venta .modal-footer');
+        if (footer) {
+            footer.innerHTML = `
+                <button class="btn btn-ghost" id="btn-cerrar-ver">Cerrar</button>
+                <button class="btn btn-secondary" onclick="imprimirOrden('${venta.id}')" style="margin-right: 8px;">🖨️ Imprimir</button>
+                <a href="#" class="btn btn-primary" id="btn-ver-pagos">Ver Pagos</a>
+            `;
+            // Re-asignar evento al botón cerrar
+            document.getElementById('btn-cerrar-ver').addEventListener('click', cerrarModalVerVenta);
+        }
+
         document.getElementById('modal-ver-venta').style.display = 'flex';
 
     } catch (error) {
@@ -687,6 +700,23 @@ window.anularVentaConfirm = async function(ventaId) {
 
 window.registrarPago = function(ventaId) {
     window.location.href = `pagos.html?venta=${ventaId}`;
+};
+
+// ============================================
+// IMPRIMIR ORDEN DE ENTREGA (NUEVA FUNCIÓN)
+// ============================================
+
+window.imprimirOrden = function(ventaId) {
+    if (!ventaId) {
+        showAlert('No se puede imprimir: falta el identificador de la orden.', 'error');
+        return;
+    }
+    // Abrir en nueva ventana con tamaño adecuado
+    const url = `imprimir-orden.html?ventaId=${ventaId}`;
+    const ventana = window.open(url, '_blank', 'width=1024,height=768,scrollbars=yes,resizable=yes');
+    if (!ventana) {
+        showAlert('Por favor, permita ventanas emergentes para imprimir.', 'warning');
+    }
 };
 
 // ============================================

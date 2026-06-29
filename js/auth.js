@@ -55,7 +55,6 @@ async function loginUser(email, password) {
             return false;
         }
 
-        // Verificar que el usuario esté activo
         if (profile.activo === false) {
             hideLoading('#btn-login');
             showAlert('Su usuario ha sido desactivado. Contacte al administrador.', 'error');
@@ -233,10 +232,30 @@ function renderUserInfo() {
 }
 
 // ============================================
+// ACTUALIZAR AVATAR CON INICIALES
+// ============================================
+function updateUserAvatar() {
+    const user = JSON.parse(localStorage.getItem('diamelab_user') || '{}');
+    const avatarEl = document.getElementById('user-avatar');
+    if (avatarEl && user.full_name) {
+        const initials = user.full_name
+            .split(' ')
+            .map(n => n[0])
+            .join('')
+            .toUpperCase()
+            .substring(0, 2);
+        avatarEl.textContent = initials;
+    } else if (avatarEl) {
+        avatarEl.textContent = '?';
+    }
+}
+
+// ============================================
 // INICIALIZAR NAVBAR Y SIDEBAR
 // ============================================
 function initNavigation() {
     renderUserInfo();
+    updateUserAvatar();
 
     const currentPage = window.location.pathname.split('/').pop() || 'dashboard.html';
     document.querySelectorAll('.nav-link').forEach(link => {
@@ -369,5 +388,6 @@ window.checkSession = checkSession;
 window.protectRoute = protectRoute;
 window.requireAdmin = requireAdmin;
 window.renderUserInfo = renderUserInfo;
+window.updateUserAvatar = updateUserAvatar;
 window.initNavigation = initNavigation;
 window.showAboutModal = showAboutModal;

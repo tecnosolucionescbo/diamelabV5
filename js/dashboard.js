@@ -4,34 +4,47 @@
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Verificar autenticación
-    const isAuth = await protectRoute();
-    if (!isAuth) return;
+    console.log('✅ Dashboard: DOM cargado');
 
-    // Inicializar navegación
-    initNavigation();
-    updateUserAvatar();
+    try {
+        console.log('🔍 Verificando autenticación...');
+        const isAuth = await protectRoute();
+        if (!isAuth) {
+            console.warn('⛔ No autenticado');
+            return;
+        }
+        console.log('✅ Autenticación OK');
 
-    // Cargar tasa BCV
-    await actualizarDisplayTasa('#tasa-bcv');
+        initNavigation();
+        updateUserAvatar();
+        console.log('✅ Navegación inicializada');
 
-    // Cargar estadísticas usando la función optimizada de API
-    await cargarEstadisticas();
-
-    // Cargar ventas recientes
-    await cargarVentasRecientes();
-
-    // Setup botón refresh tasa
-    document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
-        invalidateTasaCache();
-        showAlert('Actualizando tasa BCV...', 'info');
+        console.log('🔍 Cargando tasa BCV...');
         await actualizarDisplayTasa('#tasa-bcv');
-    });
+        console.log('✅ Tasa BCV cargada');
+
+        console.log('🔍 Cargando estadísticas...');
+        await cargarEstadisticas();
+        console.log('✅ Estadísticas cargadas');
+
+        console.log('🔍 Cargando ventas recientes...');
+        await cargarVentasRecientes();
+        console.log('✅ Ventas recientes cargadas');
+
+        document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
+            invalidateTasaCache();
+            showAlert('Actualizando tasa BCV...', 'info');
+            await actualizarDisplayTasa('#tasa-bcv');
+        });
+
+        console.log('✅ Dashboard completamente cargado');
+
+    } catch (error) {
+        console.error('❌ Error en el dashboard:', error);
+        showAlert('Error al cargar el dashboard: ' + error.message, 'error');
+    }
 });
 
-/**
- * Actualiza el avatar con iniciales del usuario
- */
 function updateUserAvatar() {
     const user = JSON.parse(localStorage.getItem('diamelab_user') || '{}');
     const avatarEl = document.getElementById('user-avatar');
@@ -46,37 +59,36 @@ function updateUserAvatar() {
     }
 }
 
-/**
- * Carga las estadísticas del dashboard usando getDashboardStats()
- */
 async function cargarEstadisticas() {
     try {
+        console.log('🔍 Obteniendo estadísticas desde getDashboardStats...');
         const stats = await getDashboardStats();
-        
-        // Actualizar DOM
+        console.log('📊 Estadísticas recibidas:', stats);
+
         document.getElementById('stat-total-ventas').textContent = formatUSD(stats.totalVentas);
         document.getElementById('stat-total-pagado').textContent = formatUSD(stats.totalPagado);
         document.getElementById('stat-total-pendiente').textContent = formatUSD(Math.max(0, stats.totalPendiente));
         document.getElementById('stat-pendientes-count').textContent = stats.ventasPendientes;
 
-        // Resumen por estado
         document.getElementById('res-pendientes').textContent = stats.ventasPendientes;
         document.getElementById('res-parciales').textContent = stats.ventasParciales;
         document.getElementById('res-pagadas').textContent = stats.ventasPagadas;
         document.getElementById('res-anuladas').textContent = stats.ventasAnuladas;
 
+        console.log('✅ Estadísticas renderizadas correctamente');
+
     } catch (error) {
-        console.error('Error cargando estadísticas:', error);
-        showAlert('Error al cargar las estadísticas', 'error');
+        console.error('❌ Error cargando estadísticas:', error);
+        showAlert('Error al cargar las estadísticas: ' + error.message, 'error');
     }
 }
 
-/**
- * Carga las ventas recientes en la tabla
- */
 async function cargarVentasRecientes() {
     try {
+        console.log('🔍 Obteniendo ventas recientes...');
         const ventas = await getVentasRecientes(10);
+        console.log('📊 Ventas recientes obtenidas:', ventas.length);
+
         const tbody = document.getElementById('tbody-ventas-recientes');
 
         if (!ventas || ventas.length === 0) {
@@ -84,7 +96,7 @@ async function cargarVentasRecientes() {
                 <tr>
                     <td colspan="7">
                         <div class="empty-state">
-                            <div class="empty-state-icon">&#128196;</div>
+                            <div class="empty-state-icon">📄</div>
                             <h3>Sin notas de entrega</h3>
                             <p>No hay notas de entrega registradas aún. Cree la primera desde el módulo de Ventas.</p>
                         </div>
@@ -129,19 +141,20 @@ async function cargarVentasRecientes() {
             `;
         }).join('');
 
+        console.log('✅ Ventas recientes renderizadas correctamente');
+
     } catch (error) {
-        console.error('Error cargando ventas recientes:', error);
+        console.error('❌ Error cargando ventas recientes:', error);
         document.getElementById('tbody-ventas-recientes').innerHTML = `
             <tr>
                 <td colspan="7" style="text-align: center; padding: 2rem; color: var(--danger);">
-                    Error al cargar los datos. Intente recargar la página.
+                    Error al cargar los datos: ${error.message}
                 </td>
             </tr>
         `;
     }
 }
 
-// Exportar funciones
 window.updateUserAvatar = updateUserAvatar;
 window.cargarEstadisticas = cargarEstadisticas;
 window.cargarVentasRecientes = cargarVentasRecientes;

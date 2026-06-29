@@ -620,6 +620,34 @@ async function deleteCliente(id) {
     if (error) throw error;
     return true;
 }
+// ============================================================
+// EXPORTAR VENTAS CON PAGOS Y FACTURAS (PARA EXCEL)
+// ============================================================
+
+async function getVentasCompletasConPagos(sede = null) {
+    // Obtener ventas con cliente, vendedor, items y pagos
+    let query = supabaseClient
+        .from('ventas')
+        .select(`
+            *,
+            cliente:clientes(razon_social, rif, direccion, telefono, email),
+            vendedor:profiles(full_name),
+            items:venta_items(*),
+            pagos:pagos(*)
+        `)
+        .neq('estado', 'anulada');
+
+    if (sede) {
+        query = query.eq('sede', sede);
+    }
+
+    const { data, error } = await query.order('fecha_emision', { ascending: false });
+    if (error) throw error;
+    return data || [];
+}
+
+// Exportar
+window.getVentasCompletasConPagos = getVentasCompletasConPagos;
 
 // ============================================================
 // EXPORTAR PARA USO GLOBAL

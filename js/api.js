@@ -153,16 +153,11 @@ async function actualizarDisplayTasa(selector = '.tasa-bcv-display') {
 // ============================================
 
 async function getClientes() {
-    console.log('🔍 getClientes() llamada');
     const { data, error } = await supabaseClient
         .from('clientes')
         .select('*')
         .order('razon_social', { ascending: true });
-    if (error) {
-        console.error('❌ Error en getClientes:', error);
-        throw error;
-    }
-    console.log('✅ getClientes() éxito:', data?.length || 0, 'registros');
+    if (error) throw error;
     return data || [];
 }
 
@@ -283,6 +278,31 @@ async function updateVenta(id, ventaData) {
 
 async function anularVenta(id) {
     return updateVenta(id, { estado: 'anulada' });
+}
+
+// ============================================
+// ELIMINAR VENTA (SOLO ADMIN)
+// ============================================
+
+async function deleteVenta(id) {
+    // Verificar si tiene pagos asociados
+    const { count, error: countError } = await supabaseClient
+        .from('pagos')
+        .select('*', { count: 'exact', head: true })
+        .eq('venta_id', id);
+    if (countError) throw countError;
+
+    if (count > 0) {
+        throw new Error(`La venta tiene ${count} pagos asociados. Debe eliminarlos primero.`);
+    }
+
+    // Eliminar la venta (en cascada eliminará venta_items si está configurado)
+    const { error } = await supabaseClient
+        .from('ventas')
+        .delete()
+        .eq('id', id);
+    if (error) throw error;
+    return true;
 }
 
 // ============================================
@@ -447,7 +467,6 @@ async function getVentasRecientes(limit = 10) {
 // ============================================================
 
 async function getProfiles({ limit = 100, offset = 0, filtro = '' } = {}) {
-    console.log('🔍 getProfiles() llamada con filtro:', filtro);
     let query = supabaseClient
         .from('profiles')
         .select('*', { count: 'exact' })
@@ -459,11 +478,7 @@ async function getProfiles({ limit = 100, offset = 0, filtro = '' } = {}) {
 
     const { data, error, count } = await query
         .range(offset, offset + limit - 1);
-    if (error) {
-        console.error('❌ Error en getProfiles:', error);
-        throw error;
-    }
-    console.log('✅ getProfiles() éxito:', data?.length || 0, 'registros');
+    if (error) throw error;
     return { data, count };
 }
 
@@ -488,7 +503,6 @@ async function deleteProfile(id) {
 }
 
 async function createUserWithProfile(email, password, fullName, role, sede) {
-    console.log('🔍 createUserWithProfile() llamada');
     const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
@@ -500,11 +514,7 @@ async function createUserWithProfile(email, password, fullName, role, sede) {
             }
         }
     });
-    if (error) {
-        console.error('❌ Error en createUserWithProfile:', error);
-        throw error;
-    }
-    console.log('✅ createUserWithProfile() éxito');
+    if (error) throw error;
     return data;
 }
 
@@ -541,7 +551,7 @@ async function deleteCliente(id) {
 }
 
 // ============================================================
-// EXPORTAR PARA USO GLOBAL (TODAS LAS FUNCIONES)
+// EXPORTAR PARA USO GLOBAL
 // ============================================================
 window.obtenerTasaBCV = obtenerTasaBCV;
 window.actualizarDisplayTasa = actualizarDisplayTasa;
@@ -555,6 +565,7 @@ window.getVentaById = getVentaById;
 window.createVenta = createVenta;
 window.updateVenta = updateVenta;
 window.anularVenta = anularVenta;
+window.deleteVenta = deleteVenta; // <-- NUEVA FUNCIÓN
 window.getPagosByVenta = getPagosByVenta;
 window.getAllPagos = getAllPagos;
 window.createPago = createPago;
@@ -568,5 +579,3 @@ window.deleteProfile = deleteProfile;
 window.createUserWithProfile = createUserWithProfile;
 window.updateCliente = updateCliente;
 window.deleteCliente = deleteCliente;
-
-console.log('✅ api.js cargado - todas las funciones exportadas');

@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await actualizarDisplayTasa('#tasa-bcv');
 
-  // Eventos de los botones
+  // Eventos existentes
   document.getElementById('btn-backup-estructura').addEventListener('click', exportarEstructura);
 
   document.getElementById('btn-backup-json-completo').addEventListener('click', () => exportarJSON('completo'));
@@ -31,6 +31,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-backup-csv-ventas').addEventListener('click', () => exportarCSV('ventas'));
   document.getElementById('btn-backup-csv-pagos').addEventListener('click', () => exportarCSV('pagos'));
   document.getElementById('btn-backup-csv-usuarios').addEventListener('click', () => exportarCSV('profiles'));
+
+  // NUEVO: Exportar Excel con notas, pagos y facturas
+  document.getElementById('btn-exportar-excel-completo').addEventListener('click', exportarExcelCompleto);
 
   document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
     invalidateTasaCache();
@@ -63,7 +66,7 @@ function descargarArchivo(contenido, nombreArchivo, tipo = 'application/json') {
 }
 
 // ============================================
-// 1. EXPORTAR ESTRUCTURA SQL (setup.sql)
+// 1. EXPORTAR ESTRUCTURA SQL
 // ============================================
 
 async function exportarEstructura() {
@@ -90,7 +93,6 @@ async function exportarJSON(tabla) {
     mostrarStatus(`Exportando datos de ${tabla}...`, 'info');
 
     if (tabla === 'completo') {
-      // Exportar todas las tablas principales
       const tablas = ['clientes', 'ventas', 'pagos', 'profiles', 'venta_items'];
       const resultado = {};
       for (const t of tablas) {
@@ -103,7 +105,6 @@ async function exportarJSON(tabla) {
       descargarArchivo(json, `diamelab_backup_completo_${fecha}.json`, 'application/json');
       mostrarStatus(`✅ Backup completo exportado (${Object.keys(resultado).length} tablas).`, 'success');
     } else {
-      // Exportar una tabla específica
       const { data, error } = await supabaseClient.from(tabla).select('*');
       if (error) throw new Error(`Error en ${tabla}: ${error.message}`);
       const json = JSON.stringify(data, null, 2);
@@ -133,7 +134,6 @@ async function exportarCSV(tabla) {
       return;
     }
 
-    // Obtener cabeceras
     const headers = Object.keys(data[0]);
     const filas = data.map(item => headers.map(h => {
       let val = item[h];
@@ -156,5 +156,144 @@ async function exportarCSV(tabla) {
     console.error(error);
     mostrarStatus(`❌ Error: ${error.message}`, 'error');
     showAlert('Error al exportar CSV', 'error');
+  }
+}
+
+// ============================================
+// 4. NUEVO: EXPORTAR NOTAS CON PAGOS Y FACTURAS EN EXCEL
+// ============================================
+
+async function exportarExcelCompleto() {
+  try {
+    const sede = document.getElementById('excel-sede').value || null;
+    const nombreSede = sede || 'Todas';
+
+    mostrarStatus(`Exportando notas con pagos y facturas (${nombreSede})...`, 'info');
+
+    // Obtener datos
+    const ventas = await getVentasCompletasConPagos(sede);
+
+    if (!ventas || ventas.length === 0) {
+      mostrarStatus(`⚠️ No hay notas de entrega para la sede seleccionada.`, 'warning');
+      return;
+    }
+
+    // Preparar hojas
+    const hojaNotas = [];
+    const hojaPagos = [];
+    const hojaFacturas = [];
+    const resumen = {};
+
+    // Recorrer ventas
+    ventas.forEach(v => {
+      // Hoja Notas
+      const cliente = v.cliente || {};
+      hojaNotas.push({
+        'Correlativo A2': v.correlacion_a2 || '',
+        'Fecha Emisión': v.fecha_emision ? formatDate(v.fecha_emision) : '',
+        'Fecha Vencimiento': v.fecha_vencimiento ? formatDate(v.fecha_vencimiento) : '',
+        'Cliente': cliente.razon_social || '',
+        'RIF': cliente.rif || '',
+        'Sede': v.sede || '',
+        'Monto Base (USD)': parseFloat(v.monto_total_usd) || 0,
+        'IVA (USD)': parseFloat(v.monto_iva) || 0,
+        'Total con IVA (USD)': parseFloat(v.total_con_iva) || 0,
+        'Tasa BCV': parseFloat(v.tasa_bcv_aplicada) || 0,
+        'Estado': v.estado || '',
+        'Vendedor': v.vendedor?.full_name || '',
+        'Nº Factura': v.numero_factura || '',
+        'Fecha Factura': v.fecha_factura ? formatDate(v.fecha_factura) : '',
+        'Notas': v.notas || ''
+      });
+
+      // Hoja Pagos
+      if (v.pagos && v.pagos.length > 0) {
+        v.pagos.forEach(p => {
+          hojaPagos.push({
+            'Correlativo A2': v.correlacion_a2 || '',
+            'Cliente': cliente.razon_social || '',
+            'Fecha Pago': p.fecha_pago ? formatDate(p.fecha_pago) : '',
+            'Monto Pagado (USD)': parseFloat(p.monto_pagado_usd) || 0,
+            'Método': p.metodo_pago || '',
+            'Referencia': p.referencia || '',
+            'Banco Origen': p.banco_origen || '',
+            'Tasa Usada': parseFloat(p.tasa_usada) || 0,
+            'Validado': p.validado ? 'Sí' : 'No',
+            'Vendedor': p.vendedor?.full_name || ''
+          });
+        });
+      }
+
+      // Hoja Facturas (resumen por nota)
+      if (v.numero_factura) {
+        hojaFacturas.push({
+          'Correlativo A2': v.correlacion_a2 || '',
+          'Cliente': cliente.razon_social || '',
+          'Nº Factura': v.numero_factura || '',
+          'Fecha Factura': v.fecha_factura ? formatDate(v.fecha_factura) : '',
+          'Monto Base (USD)': parseFloat(v.monto_total_usd) || 0,
+          'IVA (USD)': parseFloat(v.monto_iva) || 0,
+          'Total Facturado (USD)': parseFloat(v.total_con_iva) || 0,
+          'Sede': v.sede || ''
+        });
+      }
+    });
+
+    // Crear libro Excel
+    const wb = XLSX.utils.book_new();
+
+    // Hoja Notas
+    const wsNotas = XLSX.utils.json_to_sheet(hojaNotas);
+    XLSX.utils.book_append_sheet(wb, wsNotas, 'Notas');
+
+    // Hoja Pagos
+    const wsPagos = XLSX.utils.json_to_sheet(hojaPagos);
+    XLSX.utils.book_append_sheet(wb, wsPagos, 'Pagos');
+
+    // Hoja Facturas
+    const wsFacturas = XLSX.utils.json_to_sheet(hojaFacturas);
+    XLSX.utils.book_append_sheet(wb, wsFacturas, 'Facturas');
+
+    // Hoja Resumen (totales por sede)
+    const totalBase = hojaNotas.reduce((s, r) => s + (r['Monto Base (USD)'] || 0), 0);
+    const totalIVA = hojaNotas.reduce((s, r) => s + (r['IVA (USD)'] || 0), 0);
+    const totalFacturado = hojaNotas.reduce((s, r) => s + (r['Total con IVA (USD)'] || 0), 0);
+    const totalPagado = hojaPagos.reduce((s, r) => s + (r['Monto Pagado (USD)'] || 0), 0);
+    const notasFacturadas = hojaFacturas.length;
+    const notasSinFacturar = hojaNotas.filter(r => !r['Nº Factura']).length;
+
+    const resumenData = [
+      { 'Concepto': 'Sede', 'Valor': nombreSede },
+      { 'Concepto': 'Total Notas', 'Valor': hojaNotas.length },
+      { 'Concepto': 'Total Base (USD)', 'Valor': totalBase.toFixed(2) },
+      { 'Concepto': 'Total IVA (USD)', 'Valor': totalIVA.toFixed(2) },
+      { 'Concepto': 'Total Facturado (USD)', 'Valor': totalFacturado.toFixed(2) },
+      { 'Concepto': 'Total Pagado (USD)', 'Valor': totalPagado.toFixed(2) },
+      { 'Concepto': 'Notas Facturadas', 'Valor': notasFacturadas },
+      { 'Concepto': 'Notas sin Facturar', 'Valor': notasSinFacturar },
+    ];
+
+    const wsResumen = XLSX.utils.json_to_sheet(resumenData);
+    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+
+    // Generar archivo Excel
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fecha = new Date().toISOString().slice(0, 10);
+    a.download = `notas_pagos_facturas_${nombreSede.replace(/\s/g, '_')}_${fecha}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    mostrarStatus(`✅ Excel exportado correctamente (${hojaNotas.length} notas, ${hojaPagos.length} pagos, ${hojaFacturas.length} facturas).`, 'success');
+
+  } catch (error) {
+    console.error('Error exportando Excel:', error);
+    mostrarStatus(`❌ Error: ${error.message}`, 'error');
+    showAlert('Error al exportar Excel: ' + error.message, 'error');
   }
 }

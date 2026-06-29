@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Respaldo - Diamelab</title>
   <link rel="stylesheet" href="css/styles.css">
+  <!-- SheetJS para generar Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     .backup-grid {
@@ -42,16 +44,6 @@
     .backup-card .btn {
       width: 100%;
     }
-    .backup-card .badge-table {
-      display: inline-block;
-      padding: 0.2rem 0.6rem;
-      border-radius: var(--radius-full);
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: var(--info-light);
-      color: #1e40af;
-      margin-bottom: var(--space-sm);
-    }
     .backup-actions {
       display: flex;
       flex-wrap: wrap;
@@ -61,7 +53,11 @@
     }
     .backup-actions .btn {
       flex: 1;
-      min-width: 120px;
+      min-width: 100px;
+    }
+    .backup-actions .btn-sm {
+      font-size: 0.8rem;
+      padding: 0.4rem 0.8rem;
     }
     #backup-status {
       margin-top: var(--space-lg);
@@ -77,11 +73,26 @@
     #backup-status .mensaje.success { color: var(--success); }
     #backup-status .mensaje.error { color: var(--danger); }
     #backup-status .mensaje.info { color: var(--info); }
+    .sede-selector {
+      margin: var(--space-md) 0;
+      display: flex;
+      gap: var(--space-sm);
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .sede-selector select {
+      padding: 0.4rem 1rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--gray-300);
+      font-size: 0.9rem;
+      min-width: 180px;
+    }
   </style>
 </head>
 <body>
   <div class="app-layout">
-    <!-- Sidebar (igual al de las demás páginas) -->
+    <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <img src="assets/logo-diamelab.jpg" alt="Diamelab">
@@ -209,6 +220,26 @@
                   <button class="btn btn-secondary btn-sm" id="btn-backup-csv-pagos">Pagos</button>
                   <button class="btn btn-secondary btn-sm" id="btn-backup-csv-usuarios">Usuarios</button>
                 </div>
+              </div>
+
+              <!-- NUEVO: Exportar Notas con Pagos y Facturas en Excel -->
+              <div class="backup-card" style="border: 2px solid var(--success);">
+                <div class="icon">📈</div>
+                <h3>Notas con Pagos y Facturas (Excel)</h3>
+                <p>Exporta todas las notas de entrega con sus pagos y datos de facturación en un archivo Excel con múltiples hojas, filtrado por sede.</p>
+                <div class="sede-selector">
+                  <select id="excel-sede">
+                    <option value="">Todas las sedes</option>
+                    <option value="Ciudad Bolivar">Ciudad Bolívar</option>
+                    <option value="Ciudad Guayana">Ciudad Guayana</option>
+                    <option value="Maturin">Maturín</option>
+                  </select>
+                </div>
+                <button class="btn btn-success" id="btn-exportar-excel-completo">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Exportar Excel
+                </button>
+                <div style="margin-top: var(--space-sm); font-size: 0.75rem; color: var(--gray-400);">.xlsx con 4 hojas: Notas, Pagos, Facturas, Resumen</div>
               </div>
             </div>
 

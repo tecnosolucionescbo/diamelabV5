@@ -225,7 +225,7 @@ async function getVentas(filtros = {}, limit = null, offset = 0) {
     if (filtros.facturado === true) {
         query = query.not('numero_factura', 'is', null).neq('numero_factura', '');
     } else if (filtros.facturado === false) {
-        query = query.or('numero_factura.is.null,numero_factura.eq.\\'\\'');
+        query = query.or('numero_factura.is.null,numero_factura.eq.\'\'');
     }
 
     query = query.order('fecha_emision', { ascending: false });
@@ -444,7 +444,7 @@ async function deleteFile(bucket, path) {
 }
 
 // ============================================
-// DASHBOARD
+// DASHBOARD - ESTADÍSTICAS
 // ============================================
 
 async function getDashboardStats() {
@@ -534,7 +534,7 @@ async function getVentasRecientes(limit = 10) {
 }
 
 // ============================================
-// USUARIOS
+// USUARIOS (PERFILES)
 // ============================================
 
 async function getProfiles({ limit = 100, offset = 0, filtro = '' } = {}) {

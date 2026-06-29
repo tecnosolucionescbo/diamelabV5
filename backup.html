@@ -222,7 +222,7 @@
                 </div>
               </div>
 
-              <!-- NUEVO: Exportar Notas con Pagos y Facturas en Excel -->
+              <!-- Excel -->
               <div class="backup-card" style="border: 2px solid var(--success);">
                 <div class="icon">📈</div>
                 <h3>Notas con Pagos y Facturas (Excel)</h3>
@@ -251,6 +251,32 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- Modal de Contraseña -->
+  <div class="modal-overlay" id="modal-password" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3>🔐 Contraseña de Seguridad</h3>
+        <button class="modal-close" id="btn-cerrar-password">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--gray-500); margin-bottom: var(--space-md);">
+          Ingrese la contraseña para descargar este respaldo.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Contraseña</label>
+          <input type="password" id="input-password" class="form-control" placeholder="Ingrese la contraseña..." autofocus>
+          <div id="password-error" style="color: var(--danger); font-size: 0.875rem; margin-top: 4px; display: none;">
+            ❌ Contraseña incorrecta. Intente nuevamente.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btn-cancelar-password">Cancelar</button>
+        <button class="btn btn-primary" id="btn-verificar-password">Verificar</button>
+      </div>
+    </div>
   </div>
 
   <script src="js/supabase-config.js"></script>

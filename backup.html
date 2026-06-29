@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Respaldo - Diamelab</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .backup-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--space-lg);
+      margin-top: var(--space-lg);
+    }
+    .backup-card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      border: 1px solid var(--gray-200);
+      box-shadow: var(--shadow-sm);
+      text-align: center;
+      transition: all var(--transition-base);
+    }
+    .backup-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-4px);
+    }
+    .backup-card .icon {
+      font-size: 3rem;
+      margin-bottom: var(--space-sm);
+    }
+    .backup-card h3 {
+      font-size: 1.125rem;
+      margin-bottom: var(--space-sm);
+    }
+    .backup-card p {
+      font-size: 0.875rem;
+      color: var(--gray-500);
+      margin-bottom: var(--space-md);
+    }
+    .backup-card .btn {
+      width: 100%;
+    }
+    .backup-card .badge-table {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: var(--radius-full);
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--info-light);
+      color: #1e40af;
+      margin-bottom: var(--space-sm);
+    }
+    .backup-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+      justify-content: center;
+      margin-top: var(--space-sm);
+    }
+    .backup-actions .btn {
+      flex: 1;
+      min-width: 120px;
+    }
+    #backup-status {
+      margin-top: var(--space-lg);
+      padding: var(--space-md);
+      background: var(--gray-50);
+      border-radius: var(--radius-md);
+      display: none;
+    }
+    #backup-status .mensaje {
+      font-size: 0.875rem;
+      color: var(--gray-600);
+    }
+    #backup-status .mensaje.success { color: var(--success); }
+    #backup-status .mensaje.error { color: var(--danger); }
+    #backup-status .mensaje.info { color: var(--info); }
+  </style>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar (igual al de las demás páginas) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <img src="assets/logo-diamelab.jpg" alt="Diamelab">
+        <div>
+          <div class="brand-text">Diamelab</div>
+          <div class="brand-tagline">Sistema de Gestión</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Principal</div>
+          <a href="dashboard.html" class="nav-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Operaciones</div>
+          <a href="ventas.html" class="nav-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Notas de Entrega
+          </a>
+          <a href="pagos.html" class="nav-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            Pagos
+          </a>
+        </div>
+        <div class="nav-section admin-only">
+          <div class="nav-section-title">Administración</div>
+          <a href="usuarios.html" class="nav-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Usuarios
+          </a>
+          <a href="clientes.html" class="nav-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Clientes
+          </a>
+          <a href="backup.html" class="nav-link active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            Respaldo
+          </a>
+          <a href="reportes.html" class="nav-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Reportes
+          </a>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-card">
+          <div class="user-avatar" id="user-avatar">U</div>
+          <div class="user-info">
+            <div class="user-name">Cargando...</div>
+            <div class="user-role">Cargando...</div>
+          </div>
+        </div>
+        <a href="#" class="nav-link" id="btn-acerca">Acerca de</a>
+        <a href="#" class="nav-link" id="btn-logout" style="color: var(--danger);">Cerrar Sesión</a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="menu-toggle" id="menu-toggle">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <h1 class="page-title">Respaldo de Base de Datos</h1>
+        </div>
+        <div class="topbar-right">
+          <div class="tasa-bcv-display" id="tasa-bcv"><span class="spinner-tasa"></span></div>
+          <button class="topbar-btn" id="btn-refresh-tasa" title="Actualizar tasa BCV">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+          <span class="user-sede"></span>
+        </div>
+      </header>
+
+      <div class="content-area">
+        <div class="card">
+          <div class="card-header">
+            <h3>Herramientas de Respaldo</h3>
+            <span class="badge badge-pagada">Administrador</span>
+          </div>
+          <div class="card-body">
+            <p style="color: var(--gray-500); margin-bottom: var(--space-lg);">
+              Seleccione una opción para respaldar la información de la base de datos.
+            </p>
+
+            <div class="backup-grid">
+              <!-- Estructura SQL -->
+              <div class="backup-card">
+                <div class="icon">📄</div>
+                <h3>Estructura SQL</h3>
+                <p>Descargue el script SQL con la estructura completa de la base de datos (tablas, índices, políticas RLS).</p>
+                <button class="btn btn-primary" id="btn-backup-estructura">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Descargar SQL
+                </button>
+                <div style="margin-top: var(--space-sm); font-size: 0.75rem; color: var(--gray-400);">setup.sql</div>
+              </div>
+
+              <!-- Datos JSON -->
+              <div class="backup-card">
+                <div class="icon">📦</div>
+                <h3>Datos (JSON)</h3>
+                <p>Exporta todos los registros de las tablas principales en formato JSON.</p>
+                <div class="backup-actions">
+                  <button class="btn btn-secondary btn-sm" id="btn-backup-json-completo">Completo</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-backup-json-clientes">Clientes</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-backup-json-ventas">Ventas</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-backup-json-pagos">Pagos</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-backup-json-usuarios">Usuarios</button>
+                </div>
+              </div>
+
+              <!-- Datos CSV -->
+              <div class="backup-card">
+                <div class="icon">📊</div>
+                <h3>Datos (CSV)</h3>
+                <p>Exporta los registros en formato CSV para importar en hojas de cálculo.</p>
+                <div class="backup-actions">
+                  <button class="btn btn-secondary btn-sm" id="btn-backup-csv-clientes">Clientes</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-backup-csv-ventas">Ventas</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-backup-csv-pagos">Pagos</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-backup-csv-usuarios">Usuarios</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Área de estado -->
+            <div id="backup-status">
+              <p id="backup-message" class="mensaje"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/supabase-config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/backup.js"></script>
+</body>
+</html>

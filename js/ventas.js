@@ -558,7 +558,7 @@ async function guardarVenta() {
 }
 
 // ============================================
-// VER VENTA (con botón imprimir en modal)
+// VER VENTA (CORREGIDO - REASIGNA EVENTO VER PAGOS)
 // ============================================
 
 window.verVenta = async function(ventaId) {
@@ -579,7 +579,7 @@ window.verVenta = async function(ventaId) {
                 <h4 style="margin: var(--space-md) 0 var(--space-sm); font-size: 1rem; color: var(--gray-700);">Productos</h4>
                 <div class="table-container">
                     <table class="table">
-                        <thead><tr><th>Codigo</th><th>Descripcion</th><th>Cant.</th><th>Precio Unit.</th><th>Total</th></tr></thead>
+                        <thead><tr><th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio Unit.</th><th>Total</th></tr></thead>
                         <tbody>
                             ${venta.items.map(i => `
                                 <tr>
@@ -620,7 +620,7 @@ window.verVenta = async function(ventaId) {
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                 <div>
-                    <p class="form-label">Fecha de Emision</p>
+                    <p class="form-label">Fecha de Emisión</p>
                     <p>${formatDate(venta.fecha_emision)}</p>
                 </div>
                 <div>
@@ -651,7 +651,7 @@ window.verVenta = async function(ventaId) {
             ${itemsHtml}
         `;
 
-        // Actualizar footer del modal con botón imprimir
+        // Actualizar footer del modal con botones
         const footer = document.querySelector('#modal-ver-venta .modal-footer');
         if (footer) {
             footer.innerHTML = `
@@ -659,8 +659,19 @@ window.verVenta = async function(ventaId) {
                 <button class="btn btn-secondary" onclick="imprimirOrden('${venta.id}')" style="margin-right: 8px;">🖨️ Imprimir</button>
                 <a href="#" class="btn btn-primary" id="btn-ver-pagos">Ver Pagos</a>
             `;
-            // Re-asignar evento al botón cerrar
+
+            // Re-asignar evento al botón Cerrar
             document.getElementById('btn-cerrar-ver').addEventListener('click', cerrarModalVerVenta);
+
+            // 🔥 RE-ASIGNAR EVENTO AL BOTÓN "VER PAGOS"
+            document.getElementById('btn-ver-pagos').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (viewingVentaId) {
+                    window.location.href = `pagos.html?venta=${viewingVentaId}`;
+                } else {
+                    showAlert('No se pudo identificar la venta.', 'error');
+                }
+            });
         }
 
         document.getElementById('modal-ver-venta').style.display = 'flex';
@@ -703,7 +714,7 @@ window.registrarPago = function(ventaId) {
 };
 
 // ============================================
-// IMPRIMIR ORDEN DE ENTREGA (NUEVA FUNCIÓN)
+// IMPRIMIR ORDEN DE ENTREGA
 // ============================================
 
 window.imprimirOrden = function(ventaId) {
@@ -711,7 +722,6 @@ window.imprimirOrden = function(ventaId) {
         showAlert('No se puede imprimir: falta el identificador de la orden.', 'error');
         return;
     }
-    // Abrir en nueva ventana con tamaño adecuado
     const url = `imprimir-orden.html?ventaId=${ventaId}`;
     const ventana = window.open(url, '_blank', 'width=1024,height=768,scrollbars=yes,resizable=yes');
     if (!ventana) {

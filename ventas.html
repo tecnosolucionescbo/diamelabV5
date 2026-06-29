@@ -163,7 +163,7 @@
         </main>
     </div>
 
-    <!-- Modal Nueva Venta (existente) -->
+    <!-- Modal Nueva Venta -->
     <div class="modal-overlay" id="modal-venta" style="display: none; overflow-y: auto;">
         <div class="modal-content" style="max-width: 800px; margin: 2rem auto;">
             <div class="modal-header">
@@ -172,7 +172,6 @@
             </div>
             <div class="modal-body">
                 <form id="form-venta">
-                    <!-- Fila 1: Correlativo A2 y Cliente -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label">Correlativo A2 <span class="required">*</span></label>
@@ -190,7 +189,6 @@
                         </div>
                     </div>
 
-                    <!-- Fila 2: Fechas -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label">Fecha de Emisión <span class="required">*</span></label>
@@ -203,7 +201,6 @@
                         </div>
                     </div>
 
-                    <!-- Fila 3: Sede y Tasa -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label">Sede <span class="required">*</span></label>
@@ -223,7 +220,6 @@
                         </div>
                     </div>
 
-                    <!-- Fila 4: Monto Total -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label">Monto Total (USD) <span class="required">*</span></label>
@@ -239,7 +235,6 @@
                         </div>
                     </div>
 
-                    <!-- Items de Venta (opcional) -->
                     <div class="form-group" style="margin-bottom: var(--space-md);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-sm);">
                             <label class="form-label" style="margin-bottom: 0;">Productos / Items <span style="font-weight: 400; color: var(--gray-400);">(Opcional)</span></label>
@@ -258,7 +253,6 @@
                         </div>
                     </div>
 
-                    <!-- Notas -->
                     <div class="form-group">
                         <label class="form-label">Notas / Observaciones</label>
                         <textarea id="v-notas" class="form-control" rows="2" placeholder="Observaciones opcionales..."></textarea>
@@ -272,7 +266,7 @@
         </div>
     </div>
 
-    <!-- Modal Nuevo Cliente (existente) -->
+    <!-- Modal Nuevo Cliente -->
     <div class="modal-overlay" id="modal-cliente" style="display: none;">
         <div class="modal-content" style="max-width: 450px;">
             <div class="modal-header">
@@ -313,7 +307,7 @@
         </div>
     </div>
 
-    <!-- Modal Ver Venta (existente) -->
+    <!-- Modal Ver Venta -->
     <div class="modal-overlay" id="modal-ver-venta" style="display: none; overflow-y: auto;">
         <div class="modal-content" style="max-width: 700px; margin: 2rem auto;">
             <div class="modal-header">
@@ -326,13 +320,13 @@
             <div class="modal-footer">
                 <button class="btn btn-ghost" id="btn-cerrar-ver">Cerrar</button>
                 <button class="btn btn-secondary" onclick="imprimirOrden('${venta.id}')" style="margin-right: 8px;">🖨️ Imprimir</button>
-                <button class="btn btn-primary" id="btn-ver-pagos">Ver Pagos</button>
-                <button class="btn btn-success" id="btn-facturar-modal">🧾 Facturar</button>
+                <button class="btn btn-success" onclick="abrirModalFacturacion('${venta.id}')" style="margin-right: 8px;">🧾 Facturar</button>
+                <a href="#" class="btn btn-primary" id="btn-ver-pagos">Ver Pagos</a>
             </div>
         </div>
     </div>
 
-    <!-- Modal de Facturación (NUEVO) -->
+    <!-- Modal de Facturación -->
     <div class="modal-overlay" id="modal-facturacion" style="display: none;">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">

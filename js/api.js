@@ -1,79 +1,80 @@
 /**
  * Sistema Diamelab - APIs y Servicios Externos
  * Consumo de Tasa BCV y otras APIs
+ * VERSIÓN DEFINITIVA - CON FALLBACK MANUAL Y CACHE FORZADA
  */
 
 // ============================================
-// API DE TASA BCV (OFICIAL + FALLBACK)
+// CONFIGURACIÓN
+// ============================================
+const TASA_CACHE_KEY = 'diamelab_tasa_bcv';
+const TASA_CACHE_TIME = 30 * 60 * 1000; // 30 minutos
+
+// TASA CORRECTA ACTUAL DEL BCV (SE ACTUALIZA MANUALMENTE SI ES NECESARIO)
+const TASA_FALLBACK_MANUAL = 623.0223;
+
+// ============================================
+// OBTENER TASA (CON CACHE Y FALLBACK)
 // ============================================
 
-const TASA_CACHE_KEY = 'diamelab_tasa_bcv';
-const TASA_CACHE_TIME = 5 * 60 * 1000; // 5 minutos (reducido para actualizar más rápido)
-
 async function obtenerTasaBCV() {
+    // 1. Intentar obtener de caché si es válida
     const cached = getCachedTasa();
     if (cached) {
-        console.log('Usando tasa en caché:', cached.tasa);
+        console.log('✅ Usando tasa en caché:', cached.tasa);
         return cached;
     }
 
-    // PRIORIDAD 1: PydolarVE (API oficial de Venezuela, 4 decimales)
+    console.log('🔄 Buscando tasa actual...');
+
+    // 2. Intentar desde PydolarVE (oficial, 4 decimales)
     try {
         const tasa = await fetchTasaPydolar();
-        if (tasa) {
+        if (tasa && tasa > 0) {
+            console.log('✅ Tasa obtenida de PydolarVE:', tasa);
             cacheTasa(tasa);
-            return { tasa: tasa, fuente: 'PydolarVE (Oficial)' };
+            return { tasa, fuente: 'PydolarVE (Oficial)' };
         }
     } catch (error) {
-        console.warn('PydolarVE falló, intentando siguiente fuente...', error);
+        console.warn('⚠️ PydolarVE falló:', error);
     }
 
-    // PRIORIDAD 2: DolarAPI (alternativa, 4 decimales)
+    // 3. Intentar desde DolarAPI
     try {
         const tasa = await fetchTasaDolarAPI();
-        if (tasa) {
+        if (tasa && tasa > 0) {
+            console.log('✅ Tasa obtenida de DolarAPI:', tasa);
             cacheTasa(tasa);
-            return { tasa: tasa, fuente: 'DolarAPI' };
+            return { tasa, fuente: 'DolarAPI' };
         }
     } catch (error) {
-        console.warn('DolarAPI falló, intentando siguiente fuente...', error);
+        console.warn('⚠️ DolarAPI falló:', error);
     }
 
-    // PRIORIDAD 3: Proxy alternativo (bcv-api2)
-    try {
-        const tasa = await fetchTasaProxyAlternativo();
-        if (tasa) {
-            cacheTasa(tasa);
-            return { tasa: tasa, fuente: 'Proxy Alternativo' };
-        }
-    } catch (error) {
-        console.warn('Proxy alternativo falló:', error);
-    }
-
-    // PRIORIDAD 4: ExchangeRate (solo 2 decimales, fallback)
+    // 4. Intentar desde ExchangeRate (solo 2 decimales)
     try {
         const tasa = await fetchTasaExchangeRate();
-        if (tasa) {
+        if (tasa && tasa > 0) {
+            console.log('✅ Tasa obtenida de ExchangeRate:', tasa);
             cacheTasa(tasa);
-            return { tasa: tasa, fuente: 'ExchangeRate (fallback)' };
+            return { tasa, fuente: 'ExchangeRate' };
         }
     } catch (error) {
-        console.warn('ExchangeRate también falló:', error);
+        console.warn('⚠️ ExchangeRate falló:', error);
     }
 
-    // Último recurso: caché o valor por defecto
-    const ultimaTasa = localStorage.getItem('diamelab_ultima_tasa_valida');
-    if (ultimaTasa) {
-        return { tasa: parseFloat(ultimaTasa), fuente: 'Última tasa guardada (offline)' };
-    }
-    return { tasa: 65.50, fuente: 'Valor por defecto' };
+    // 5. Si todo falla, usar la tasa manual (fallback)
+    console.warn('⚠️ Todas las APIs fallaron, usando tasa manual de respaldo.');
+    const tasaManual = TASA_FALLBACK_MANUAL;
+    cacheTasa(tasaManual);
+    return { tasa: tasaManual, fuente: 'Manual (fallback)' };
 }
 
 // ============================================
-// FUENTES DE TASA
+// FUENTES DE TASA (INDEPENDIENTES)
 // ============================================
 
-// 1. PydolarVE (recomendada, oficial, 4 decimales)
+// 1. PydolarVE (API pública venezolana, recomendada)
 async function fetchTasaPydolar() {
     try {
         const response = await fetch('https://pydolarve.org/api/v1/dolar/', {
@@ -82,7 +83,7 @@ async function fetchTasaPydolar() {
         });
         if (!response.ok) return null;
         const data = await response.json();
-        // La API devuelve: { "usd": { "bcv": 623.0223, ... } }
+        // La API devuelve { "usd": { "bcv": 623.0223, ... } }
         if (data && data.usd && data.usd.bcv) {
             return parseFloat(data.usd.bcv);
         }
@@ -93,7 +94,7 @@ async function fetchTasaPydolar() {
     }
 }
 
-// 2. DolarAPI (alternativa, 4 decimales)
+// 2. DolarAPI (alternativa)
 async function fetchTasaDolarAPI() {
     try {
         const response = await fetch('https://ve.dolarapi.com/v1/dolares/oficial', {
@@ -112,26 +113,7 @@ async function fetchTasaDolarAPI() {
     }
 }
 
-// 3. Proxy alternativo (bcv-api2)
-async function fetchTasaProxyAlternativo() {
-    try {
-        const response = await fetch('https://bcv-api2.vercel.app/api/tasa', {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) return null;
-        const data = await response.json();
-        if (data.tasa && data.tasa > 0) {
-            return parseFloat(data.tasa);
-        }
-        return null;
-    } catch (error) {
-        console.warn('Error en proxy alternativo:', error);
-        return null;
-    }
-}
-
-// 4. ExchangeRate (fallback, solo 2 decimales)
+// 3. ExchangeRate (fallback)
 async function fetchTasaExchangeRate() {
     try {
         const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD', {
@@ -151,13 +133,14 @@ async function fetchTasaExchangeRate() {
 }
 
 // ============================================
-// CACHÉ DE TASA
+// CACHÉ DE TASA (CON INVALIDADOR FORZADO)
 // ============================================
 
 function cacheTasa(tasa) {
     const cacheData = { tasa, timestamp: Date.now(), fecha: new Date().toISOString() };
     localStorage.setItem(TASA_CACHE_KEY, JSON.stringify(cacheData));
     localStorage.setItem('diamelab_ultima_tasa_valida', tasa.toString());
+    console.log('💾 Tasa guardada en caché:', tasa);
 }
 
 function getCachedTasa() {
@@ -169,13 +152,20 @@ function getCachedTasa() {
         if (age < TASA_CACHE_TIME) {
             return { tasa: data.tasa, fuente: 'Caché local' };
         }
+        // La caché expiró, la eliminamos para forzar nueva consulta
+        localStorage.removeItem(TASA_CACHE_KEY);
+        console.log('⏰ Caché expirada, eliminada.');
         return null;
-    } catch { return null; }
+    } catch {
+        localStorage.removeItem(TASA_CACHE_KEY);
+        return null;
+    }
 }
 
 function invalidateTasaCache() {
     localStorage.removeItem(TASA_CACHE_KEY);
     localStorage.removeItem('diamelab_ultima_tasa_valida');
+    console.log('🗑️ Caché de tasa eliminada.');
 }
 
 // ============================================
@@ -193,17 +183,33 @@ async function actualizarDisplayTasa(selector = '.tasa-bcv-display') {
         elements.forEach(el => {
             el.innerHTML = `<span class="tasa-valor">${tasaFormateada} Bs./USD</span><span class="tasa-fuente">${fuente}</span>`;
         });
+        console.log(`📊 Tasa mostrada: ${tasaFormateada} (${fuente})`);
         return tasa;
     } catch (error) {
+        console.error('❌ Error mostrando tasa:', error);
         elements.forEach(el => { el.innerHTML = '<span class="tasa-error">Error al cargar tasa</span>'; });
         return null;
     }
 }
 
 // ============================================
-// CRUD DE CLIENTES
+// EL RESTO DEL CÓDIGO (CRUD, FACTURACIÓN, ETC.) DEBE IR AQUÍ
+// ============================================
+// A partir de aquí, todo lo que ya tenías en tu api.js (clientes, ventas, pagos, etc.)
+// Pero asegúrate de mantener las exportaciones al final.
 // ============================================
 
+// (Todas las demás funciones: getClientes, getVentas, createVenta, etc.)
+// ... (incluye todo el código que ya tenías, solo reemplaza la parte de tasa)
+// ============================================
+
+// Para que no se pierda nada, voy a incluir el resto del código abreviado pero completo.
+// Normalmente deberías tenerlo, pero si no, aquí están todas las funciones.
+// ============================================
+
+// ============================================
+// CRUD DE CLIENTES
+// ============================================
 async function getClientes() {
     const { data, error } = await supabaseClient
         .from('clientes')
@@ -246,7 +252,6 @@ async function searchClientes(query) {
 // ============================================
 // CRUD DE VENTAS (con paginación)
 // ============================================
-
 async function getVentas(filtros = {}, limit = null, offset = 0) {
     let query = supabaseClient
         .from('ventas')
@@ -357,7 +362,6 @@ async function deleteVenta(id) {
 // ============================================
 // CRUD DE PAGOS
 // ============================================
-
 async function getPagosByVenta(ventaId) {
     const { data, error } = await supabaseClient
         .from('pagos')
@@ -424,7 +428,6 @@ async function actualizarValidacionPago(pagoId, validado) {
 // ============================================
 // FACTURACIÓN
 // ============================================
-
 async function actualizarFacturaVenta(ventaId, numeroFactura, montoIva, fechaFactura) {
     const updates = {
         numero_factura: numeroFactura || null,
@@ -491,7 +494,6 @@ async function getVentasCompletasConPagos(sede = null) {
 // ============================================
 // STORAGE
 // ============================================
-
 async function uploadFile(file, bucket) {
     if (!file) return null;
     const fileExt = file.name.split('.').pop();
@@ -517,7 +519,6 @@ async function deleteFile(bucket, path) {
 // ============================================
 // DASHBOARD - ESTADÍSTICAS
 // ============================================
-
 async function getDashboardStats() {
     const sede = isAdmin() ? null : getUserSede();
 
@@ -594,7 +595,6 @@ async function getVentasRecientes(limit = 10) {
 // ============================================
 // USUARIOS (PERFILES)
 // ============================================
-
 async function getProfiles({ limit = 100, offset = 0, filtro = '' } = {}) {
     let query = supabaseClient
         .from('profiles')
@@ -650,7 +650,6 @@ async function createUserWithProfile(email, password, fullName, role, sede) {
 // ============================================
 // CLIENTES - ACTUALIZAR / ELIMINAR
 // ============================================
-
 async function updateCliente(id, updates) {
     const { data, error } = await supabaseClient
         .from('clientes')
@@ -712,3 +711,5 @@ window.deleteProfile = deleteProfile;
 window.createUserWithProfile = createUserWithProfile;
 window.updateCliente = updateCliente;
 window.deleteCliente = deleteCliente;
+
+console.log('✅ api.js cargado correctamente (versión definitiva con fallback manual).');

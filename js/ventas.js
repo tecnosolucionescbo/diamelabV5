@@ -32,13 +32,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     updateUserAvatarVentas();
 
+    // === LEER FILTRO DESDE URL (para navegación desde Dashboard) ===
+    const urlParams = new URLSearchParams(window.location.search);
+    const filtroFactura = urlParams.get('filtro');
+
+    if (filtroFactura === 'facturadas') {
+        const selectFacturado = document.getElementById('filtro-facturado');
+        if (selectFacturado) selectFacturado.value = 'si';
+    } else if (filtroFactura === 'pendientes') {
+        const selectFacturado = document.getElementById('filtro-facturado');
+        if (selectFacturado) selectFacturado.value = 'no';
+    }
+    // ============================================
+
+    // Cargar tasa BCV
     await actualizarDisplayTasa('#tasa-bcv');
+
+    // Setup sede segun usuario
     setupSedeUsuario();
+
+    // Cargar clientes y ventas
     await cargarClientes();
-    await cargarVentas(true);
+    await cargarVentas(true); // primera carga
+
+    // Configurar eventos
     setupEventListeners();
+
+    // Configurar observer para infinite scroll
     configurarObserver();
-    setupFacturacionListeners();
 });
 
 // ============================================
@@ -286,12 +307,10 @@ function generarFilaVenta(v) {
     const vencimientoClass = diasRestantes < 0 ? 'text-danger' : diasRestantes <= 3 ? 'text-warning' : '';
     const vencText = diasRestantes < 0 ? 'Vencido' : `${diasRestantes}d`;
 
-    // === FACTURACIÓN ===
     const tieneFactura = v.numero_factura && v.numero_factura.trim() !== '';
     const facturaBadge = tieneFactura
         ? `<span class="badge badge-pagada" style="font-size:0.7rem;">✅ Facturada</span>`
         : `<span class="badge badge-pendiente" style="font-size:0.7rem;">⏳ Pendiente</span>`;
-    const facturaNumero = tieneFactura ? v.numero_factura : '-';
 
     return `
         <tr>
@@ -555,7 +574,7 @@ async function guardarVenta() {
 }
 
 // ============================================
-// VER VENTA (con botón de facturación)
+// VER VENTA
 // ============================================
 
 window.verVenta = async function(ventaId) {
@@ -593,7 +612,6 @@ window.verVenta = async function(ventaId) {
             `;
         }
 
-        // Información de facturación
         const facturaInfo = venta.numero_factura ? `
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md); padding: var(--space-md); background: var(--success-light); border-radius: var(--radius-md); border-left: 4px solid var(--success);">
                 <div>
@@ -732,7 +750,6 @@ window.abrirModalFacturacion = async function(ventaId) {
         document.getElementById('f-monto-base').value = formatUSD(venta.monto_total_usd);
         document.getElementById('f-total-con-iva').value = formatUSD(venta.total_con_iva || venta.monto_total_usd);
 
-        // Mostrar u ocultar botón "Quitar Factura"
         const btnQuitar = document.getElementById('btn-quitar-facturacion');
         if (venta.numero_factura && venta.numero_factura.trim() !== '') {
             btnQuitar.style.display = '';
@@ -760,7 +777,6 @@ function calcularIVA() {
     const ventaId = document.getElementById('f-venta-id').value;
     if (!ventaId) return;
 
-    // Obtener el monto base de la venta (desde el campo que ya cargamos)
     const montoBaseText = document.getElementById('f-monto-base').value;
     const montoBase = parseFloat(montoBaseText.replace(/[$,]/g, '')) || 0;
 
@@ -769,7 +785,7 @@ function calcularIVA() {
         return;
     }
 
-    const iva = montoBase * 0.16; // 16% de IVA
+    const iva = montoBase * 0.16;
     document.getElementById('f-monto-iva').value = iva.toFixed(2);
     const totalConIva = montoBase + iva;
     document.getElementById('f-total-con-iva').value = formatUSD(totalConIva);
@@ -805,7 +821,6 @@ async function guardarFacturacion() {
         cerrarModalFacturacion();
         await cargarVentas(true);
 
-        // Si el modal de detalle está abierto, actualizarlo
         if (document.getElementById('modal-ver-venta').style.display === 'flex' && viewingVentaId) {
             await verVenta(viewingVentaId);
         }

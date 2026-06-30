@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ Dashboard: DOM cargado');
 
     try {
+        console.log('🔍 Verificando autenticación...');
         const isAuth = await protectRoute();
         if (!isAuth) {
             console.warn('⛔ No autenticado');
@@ -18,12 +19,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateUserAvatar();
         console.log('✅ Navegación inicializada');
 
+        console.log('🔍 Cargando tasa BCV...');
         await actualizarDisplayTasa('#tasa-bcv');
         console.log('✅ Tasa BCV cargada');
 
+        console.log('🔍 Cargando estadísticas...');
         await cargarEstadisticas();
         console.log('✅ Estadísticas cargadas');
 
+        console.log('🔍 Cargando ventas recientes...');
         await cargarVentasRecientes();
         console.log('✅ Ventas recientes cargadas');
 
@@ -59,20 +63,40 @@ async function cargarEstadisticas() {
     try {
         console.log('🔍 Obteniendo estadísticas...');
 
-        // 1. Estadísticas de ventas (ya existentes)
+        // 1. Estadísticas de ventas
         const stats = await getDashboardStats();
 
         // 2. Estadísticas de validación de pagos
-        const { data: pagos, error } = await supabaseClient
+        const { data: pagos, error: errorPagos } = await supabaseClient
             .from('pagos')
             .select('validado, venta:ventas!inner(estado)')
             .neq('venta.estado', 'anulada');
 
-        if (error) throw error;
+        if (errorPagos) throw errorPagos;
 
         const totalPagos = pagos.length;
         const validados = pagos.filter(p => p.validado === true).length;
         const pendientes = totalPagos - validados;
+
+        // 3. Estadísticas de facturación
+        // Facturas emitidas (notas con número de factura)
+        const { count: facturadas, error: errorFacturadas } = await supabaseClient
+            .from('ventas')
+            .select('*', { count: 'exact', head: true })
+            .neq('estado', 'anulada')
+            .not('numero_factura', 'is', null)
+            .neq('numero_factura', '');
+
+        if (errorFacturadas) throw errorFacturadas;
+
+        // Facturas pendientes (notas sin número de factura)
+        const { count: pendientesFactura, error: errorPendientesFactura } = await supabaseClient
+            .from('ventas')
+            .select('*', { count: 'exact', head: true })
+            .neq('estado', 'anulada')
+            .or('numero_factura.is.null,numero_factura.eq.\'\'');
+
+        if (errorPendientesFactura) throw errorPendientesFactura;
 
         // Actualizar DOM
         document.getElementById('stat-total-ventas').textContent = formatUSD(stats.totalVentas);
@@ -86,27 +110,41 @@ async function cargarEstadisticas() {
         document.getElementById('res-pagadas').textContent = stats.ventasPagadas;
         document.getElementById('res-anuladas').textContent = stats.ventasAnuladas;
 
-        // NUEVO: Actualizar tarjetas de validación de pagos
+        // Pagos validados / pendientes
         document.getElementById('stat-pagos-validados').textContent = validados;
         document.getElementById('stat-pagos-pendientes-validar').textContent = pendientes;
 
-        // Asignar enlaces a las tarjetas
-        const cardValidados = document.getElementById('stat-pagos-validados').closest('.stat-card');
+        // Facturas emitidas / pendientes
+        document.getElementById('stat-facturas-emitidas').textContent = facturadas || 0;
+        document.getElementById('stat-facturas-pendientes').textContent = pendientesFactura || 0;
+
+        // Asignar eventos click para redirigir
+        const cardValidados = document.getElementById('stat-card-validados');
         if (cardValidados) {
-            cardValidados.style.cursor = 'pointer';
-            cardValidados.title = 'Ver pagos validados';
-            cardValidados.onclick = () => {
+            cardValidados.addEventListener('click', () => {
                 window.location.href = 'pagos.html?filtro=validados';
-            };
+            });
         }
 
-        const cardPendientes = document.getElementById('stat-pagos-pendientes-validar').closest('.stat-card');
+        const cardPendientes = document.getElementById('stat-card-pendientes');
         if (cardPendientes) {
-            cardPendientes.style.cursor = 'pointer';
-            cardPendientes.title = 'Ver pagos pendientes de validar';
-            cardPendientes.onclick = () => {
+            cardPendientes.addEventListener('click', () => {
                 window.location.href = 'pagos.html?filtro=pendientes';
-            };
+            });
+        }
+
+        const cardFacturasEmitidas = document.getElementById('stat-card-facturas-emitidas');
+        if (cardFacturasEmitidas) {
+            cardFacturasEmitidas.addEventListener('click', () => {
+                window.location.href = 'ventas.html?filtro=facturadas';
+            });
+        }
+
+        const cardFacturasPendientes = document.getElementById('stat-card-facturas-pendientes');
+        if (cardFacturasPendientes) {
+            cardFacturasPendientes.addEventListener('click', () => {
+                window.location.href = 'ventas.html?filtro=pendientes';
+            });
         }
 
         console.log('✅ Estadísticas renderizadas correctamente');
@@ -130,7 +168,7 @@ async function cargarVentasRecientes() {
                 <tr>
                     <td colspan="7">
                         <div class="empty-state">
-                            <div class="empty-state-icon">&#128196;</div>
+                            <div class="empty-state-icon">📄</div>
                             <h3>Sin notas de entrega</h3>
                             <p>No hay notas de entrega registradas aún. Cree la primera desde el módulo de Ventas.</p>
                         </div>
@@ -189,7 +227,6 @@ async function cargarVentasRecientes() {
     }
 }
 
-// Exportar funciones
 window.updateUserAvatar = updateUserAvatar;
 window.cargarEstadisticas = cargarEstadisticas;
 window.cargarVentasRecientes = cargarVentasRecientes;

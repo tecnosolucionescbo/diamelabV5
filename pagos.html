@@ -179,7 +179,7 @@
                     </div>
                 </div>
 
-                <!-- Formulario de Pago -->
+                <!-- Formulario de Pago (MODIFICADO) -->
                 <div class="card" id="form-pago-card" style="margin-bottom: var(--space-lg); display: none;">
                     <div class="card-header">
                         <h3>Registrar Nuevo Pago</h3>
@@ -191,12 +191,14 @@
                                     <label class="form-label">Fecha de Pago <span class="required">*</span></label>
                                     <input type="date" id="p-fecha" class="form-control" required>
                                 </div>
+                                <!-- CAMPO: Monto en Bs. (ahora el usuario ingresa en bolívares) -->
                                 <div class="form-group">
-                                    <label class="form-label">Monto Pagado (USD) <span class="required">*</span></label>
+                                    <label class="form-label">Monto Pagado (Bs.) <span class="required">*</span></label>
                                     <div class="input-group">
-                                        <span class="input-group-text">$</span>
-                                        <input type="number" id="p-monto" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+                                        <span class="input-group-text">Bs.</span>
+                                        <input type="number" id="p-monto-bs" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
                                     </div>
+                                    <div class="form-text">Ingrese el monto en bolívares</div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Metodo de Pago <span class="required">*</span></label>
@@ -219,13 +221,23 @@
                                         <span class="input-group-text">Bs./USD</span>
                                         <input type="number" id="p-tasa" class="form-control" step="0.0001" min="0" placeholder="0.0000" required>
                                     </div>
-                                    <div class="form-text">Puede ajustar para pagos retroactivos</div>
+                                    <div class="form-text" id="tasa-status">Tasa automática del día (no editable a menos que cambie la fecha)</div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Referencia / Nro. Operacion</label>
                                     <input type="text" id="p-referencia" class="form-control" placeholder="Nro. de referencia, transferencia, etc.">
                                 </div>
                             </div>
+
+                            <!-- EQUIVALENTE EN USD (se muestra en grande) -->
+                            <div style="background: var(--gray-50); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); text-align: center; border: 2px solid var(--diamelab-primary);">
+                                <label class="form-label" style="font-size: 0.9rem; color: var(--gray-500);">Equivalente en USD</label>
+                                <div id="equivalente-usd-display" style="font-size: 2rem; font-weight: 700; color: var(--diamelab-primary);">$0.00</div>
+                                <div style="font-size: 0.75rem; color: var(--gray-400);">Calculado automáticamente al ingresar el monto en Bs.</div>
+                            </div>
+
+                            <!-- Campo oculto para guardar el monto en USD calculado -->
+                            <input type="hidden" id="p-monto-usd-calculado" value="0">
 
                             <div class="form-group" style="margin-bottom: var(--space-md);">
                                 <label class="form-label">Banco de Origen</label>
@@ -284,10 +296,7 @@
                                 </div>
                             </div>
 
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label class="form-label">Equivalencia en Bs.</label>
-                                <input type="text" id="p-monto-bs" class="form-control" disabled style="font-weight: 700; color: var(--diamelab-primary); max-width: 300px;">
-                            </div>
+                            <!-- Eliminamos el campo "Equivalencia en Bs." porque ya tenemos el equivalente en USD -->
                         </form>
                     </div>
                     <div class="card-footer">

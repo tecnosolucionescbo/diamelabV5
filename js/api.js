@@ -17,29 +17,29 @@ async function obtenerTasaBCV() {
         return cached;
     }
 
-    // PRIORIDAD 1: DolarAPI (devuelve 4 decimales reales, sin CORS)
+    // PRIORIDAD 1: Proxy BCV (devuelve tasa oficial con 4 decimales)
     try {
-        const tasaMD = await fetchTasaFromMonitor();
-        if (tasaMD) {
-            cacheTasa(tasaMD);
-            return { tasa: tasaMD, fuente: 'DolarAPI (4 decimales)' };
+        const tasaBCV = await fetchTasaFromMonitor();
+        if (tasaBCV) {
+            cacheTasa(tasaBCV);
+            return { tasa: tasaBCV, fuente: 'BCV Oficial (Proxy)' };
+        }
+    } catch (error) {
+        console.warn('Proxy BCV falló, intentando siguiente fuente...', error);
+    }
+
+    // PRIORIDAD 2: DolarAPI (alternativa, 4 decimales)
+    try {
+        const tasaDolarAPI = await fetchDolarAPI();
+        if (tasaDolarAPI) {
+            cacheTasa(tasaDolarAPI);
+            return { tasa: tasaDolarAPI, fuente: 'DolarAPI' };
         }
     } catch (error) {
         console.warn('DolarAPI falló, intentando siguiente fuente...', error);
     }
 
-    // PRIORIDAD 2: BCV oficial (scraping - puede fallar por CORS)
-    try {
-        const tasaBCV = await fetchTasaBCVOficial();
-        if (tasaBCV) {
-            cacheTasa(tasaBCV);
-            return { tasa: tasaBCV, fuente: 'BCV Oficial' };
-        }
-    } catch (error) {
-        console.warn('BCV oficial falló, intentando fallback...', error);
-    }
-
-    // PRIORIDAD 3: ExchangeRate (solo 2 decimales)
+    // PRIORIDAD 3: ExchangeRate (solo 2 decimales, fallback)
     try {
         const tasaMD = await fetchTasaMonitorDolar();
         if (tasaMD) {
@@ -57,57 +57,32 @@ async function obtenerTasaBCV() {
     }
     return { tasa: 65.50, fuente: 'Valor por defecto' };
 }
-async function fetchTasaBCVOficial() {
+
+// ============================================
+// FUENTES DE TASA
+// ============================================
+
+// Proxy que devuelve la tasa oficial del BCV (sin CORS)
+async function fetchTasaFromMonitor() {
     try {
-        const response = await fetch('https://www.bcv.org.ve/', {
+        const response = await fetch('https://bcv-api.vercel.app/api/tasa', {
             method: 'GET',
-            headers: { 'Accept': 'text/html' }
+            headers: { 'Accept': 'application/json' }
         });
         if (!response.ok) return null;
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const tasaElement = doc.querySelector('#dolar') || doc.querySelector('.recuadrotsmc') || doc.querySelector('[id*="dolar"]') || doc.querySelector('.centrado');
-        if (tasaElement) {
-            const texto = tasaElement.textContent;
-            const match = texto.match(/(\d{1,3}(?:[.,]\d{2,3})+)/);
-            if (match) {
-                const tasa = parseFloat(match[1].replace('.', '').replace(',', '.'));
-                if (tasa > 0) return tasa;
-            }
+        const data = await response.json();
+        if (data.tasa && data.tasa > 0) {
+            return parseFloat(data.tasa);
         }
         return null;
     } catch (error) {
-        console.warn('Error accediendo a BCV:', error);
+        console.warn('Error en proxy BCV:', error);
         return null;
     }
 }
 
-async function fetchTasaMonitorDolar() {
-    try {
-        const apisAlternativas = [
-            'https://api.exchangerate-api.com/v4/latest/USD',
-            'https://open.er-api.com/v6/latest/USD'
-        ];
-        for (const apiUrl of apisAlternativas) {
-            try {
-                const response = await fetch(apiUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
-                if (!response.ok) continue;
-                const data = await response.json();
-                if (data.rates && (data.rates.VES || data.rates.VEF)) {
-                    const tasa = data.rates.VES || data.rates.VEF;
-                    if (tasa && tasa > 0) return tasa;
-                }
-            } catch (e) { continue; }
-        }
-        return await fetchTasaFromMonitor();
-    } catch (error) {
-        console.warn('Error en fallback MonitorDolar:', error);
-        return null;
-    }
-}
-
-async function fetchTasaFromMonitor() {
+// DolarAPI (alternativa)
+async function fetchDolarAPI() {
     try {
         const response = await fetch('https://ve.dolarapi.com/v1/dolares/oficial', {
             method: 'GET',
@@ -120,10 +95,33 @@ async function fetchTasaFromMonitor() {
         }
         return null;
     } catch (error) {
-        console.warn('Error en monitor:', error);
+        console.warn('Error en DolarAPI:', error);
         return null;
     }
 }
+
+// ExchangeRate (fallback, solo 2 decimales)
+async function fetchTasaMonitorDolar() {
+    try {
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (data.rates && data.rates.VES) {
+            return parseFloat(data.rates.VES);
+        }
+        return null;
+    } catch (error) {
+        console.warn('Error en ExchangeRate:', error);
+        return null;
+    }
+}
+
+// ============================================
+// CACHÉ DE TASA
+// ============================================
 
 function cacheTasa(tasa) {
     const cacheData = { tasa, timestamp: Date.now(), fecha: new Date().toISOString() };
@@ -148,13 +146,17 @@ function invalidateTasaCache() {
     localStorage.removeItem(TASA_CACHE_KEY);
 }
 
+// ============================================
+// MOSTRAR TASA EN UI (CON 4 DECIMALES)
+// ============================================
+
 async function actualizarDisplayTasa(selector = '.tasa-bcv-display') {
     const elements = document.querySelectorAll(selector);
     if (elements.length === 0) return;
     elements.forEach(el => { el.innerHTML = '<span class="spinner-tasa"></span>'; });
     try {
         const { tasa, fuente } = await obtenerTasaBCV();
-        // Forzar 4 decimales con formato venezolano (coma como separador decimal)
+        // Formatear con 4 decimales y coma como separador decimal
         const tasaFormateada = tasa.toFixed(4).replace('.', ',');
         elements.forEach(el => {
             el.innerHTML = `<span class="tasa-valor">${tasaFormateada} Bs./USD</span><span class="tasa-fuente">${fuente}</span>`;
@@ -435,6 +437,25 @@ async function getReporteVentas(sede, fechaDesde, fechaHasta) {
     return data || [];
 }
 
+async function getVentasCompletasConPagos(sede = null) {
+    let query = supabaseClient
+        .from('ventas')
+        .select(`
+            *,
+            cliente:clientes(razon_social, rif, direccion, telefono, email),
+            vendedor:profiles(full_name),
+            items:venta_items(*),
+            pagos:pagos(*)
+        `)
+        .neq('estado', 'anulada');
+
+    if (sede) query = query.eq('sede', sede);
+
+    const { data, error } = await query.order('fecha_emision', { ascending: false });
+    if (error) throw error;
+    return data || [];
+}
+
 // ============================================
 // STORAGE
 // ============================================
@@ -466,73 +487,60 @@ async function deleteFile(bucket, path) {
 // ============================================
 
 async function getDashboardStats() {
-    console.log('🔍 getDashboardStats() iniciada');
     const sede = isAdmin() ? null : getUserSede();
-    console.log('🔍 Sede actual:', sede || 'Todas');
 
-    try {
-        console.log('🔍 Consultando ventas...');
-        let ventasQuery = supabaseClient
+    let ventasQuery = supabaseClient
+        .from('ventas')
+        .select('estado, monto_total_usd');
+    if (sede) ventasQuery = ventasQuery.eq('sede', sede);
+    const { data: ventas, error: vError } = await ventasQuery;
+    if (vError) throw vError;
+
+    let pagosQuery = supabaseClient
+        .from('pagos')
+        .select('monto_pagado_usd, venta_id');
+    if (sede) {
+        const { data: ventasSede, error: vsError } = await supabaseClient
             .from('ventas')
-            .select('estado, monto_total_usd');
-        if (sede) ventasQuery = ventasQuery.eq('sede', sede);
-        const { data: ventas, error: vError } = await ventasQuery;
-        if (vError) throw vError;
-        console.log('✅ Ventas obtenidas:', ventas.length);
-
-        console.log('🔍 Consultando pagos...');
-        let pagosQuery = supabaseClient
-            .from('pagos')
-            .select('monto_pagado_usd, venta_id');
-        if (sede) {
-            const { data: ventasSede, error: vsError } = await supabaseClient
-                .from('ventas')
-                .select('id')
-                .eq('sede', sede)
-                .neq('estado', 'anulada');
-            if (vsError) throw vsError;
-            const ids = ventasSede.map(v => v.id);
-            if (ids.length === 0) {
-                pagosQuery = pagosQuery.in('venta_id', []);
-            } else {
-                pagosQuery = pagosQuery.in('venta_id', ids);
-            }
+            .select('id')
+            .eq('sede', sede)
+            .neq('estado', 'anulada');
+        if (vsError) throw vsError;
+        const ids = ventasSede.map(v => v.id);
+        if (ids.length === 0) {
+            pagosQuery = pagosQuery.in('venta_id', []);
+        } else {
+            pagosQuery = pagosQuery.in('venta_id', ids);
         }
-        const { data: pagos, error: pError } = await pagosQuery;
-        if (pError) throw pError;
-        console.log('✅ Pagos obtenidos:', pagos.length);
-
-        const stats = {
-            totalVentas: 0,
-            totalPagado: 0,
-            totalPendiente: 0,
-            ventasPendientes: 0,
-            ventasPagadas: 0,
-            ventasParciales: 0,
-            ventasAnuladas: 0
-        };
-
-        ventas.forEach(v => {
-            const monto = parseFloat(v.monto_total_usd) || 0;
-            stats.totalVentas += monto;
-            if (v.estado === 'pendiente') stats.ventasPendientes++;
-            if (v.estado === 'pagada') stats.ventasPagadas++;
-            if (v.estado === 'parcial') stats.ventasParciales++;
-            if (v.estado === 'anulada') stats.ventasAnuladas++;
-        });
-
-        pagos.forEach(p => {
-            stats.totalPagado += parseFloat(p.monto_pagado_usd) || 0;
-        });
-
-        stats.totalPendiente = stats.totalVentas - stats.totalPagado;
-        console.log('📊 Estadísticas calculadas:', stats);
-        return stats;
-
-    } catch (error) {
-        console.error('❌ Error en getDashboardStats:', error);
-        throw error;
     }
+    const { data: pagos, error: pError } = await pagosQuery;
+    if (pError) throw pError;
+
+    const stats = {
+        totalVentas: 0,
+        totalPagado: 0,
+        totalPendiente: 0,
+        ventasPendientes: 0,
+        ventasPagadas: 0,
+        ventasParciales: 0,
+        ventasAnuladas: 0
+    };
+
+    ventas.forEach(v => {
+        const monto = parseFloat(v.monto_total_usd) || 0;
+        stats.totalVentas += monto;
+        if (v.estado === 'pendiente') stats.ventasPendientes++;
+        if (v.estado === 'pagada') stats.ventasPagadas++;
+        if (v.estado === 'parcial') stats.ventasParciales++;
+        if (v.estado === 'anulada') stats.ventasAnuladas++;
+    });
+
+    pagos.forEach(p => {
+        stats.totalPagado += parseFloat(p.monto_pagado_usd) || 0;
+    });
+
+    stats.totalPendiente = stats.totalVentas - stats.totalPagado;
+    return stats;
 }
 
 async function getVentasRecientes(limit = 10) {
@@ -638,34 +646,6 @@ async function deleteCliente(id) {
     if (error) throw error;
     return true;
 }
-// ============================================================
-// EXPORTAR VENTAS CON PAGOS Y FACTURAS (PARA EXCEL)
-// ============================================================
-
-async function getVentasCompletasConPagos(sede = null) {
-    // Obtener ventas con cliente, vendedor, items y pagos
-    let query = supabaseClient
-        .from('ventas')
-        .select(`
-            *,
-            cliente:clientes(razon_social, rif, direccion, telefono, email),
-            vendedor:profiles(full_name),
-            items:venta_items(*),
-            pagos:pagos(*)
-        `)
-        .neq('estado', 'anulada');
-
-    if (sede) {
-        query = query.eq('sede', sede);
-    }
-
-    const { data, error } = await query.order('fecha_emision', { ascending: false });
-    if (error) throw error;
-    return data || [];
-}
-
-// Exportar
-window.getVentasCompletasConPagos = getVentasCompletasConPagos;
 
 // ============================================================
 // EXPORTAR PARA USO GLOBAL
@@ -689,6 +669,7 @@ window.createPago = createPago;
 window.actualizarValidacionPago = actualizarValidacionPago;
 window.actualizarFacturaVenta = actualizarFacturaVenta;
 window.getReporteVentas = getReporteVentas;
+window.getVentasCompletasConPagos = getVentasCompletasConPagos;
 window.uploadFile = uploadFile;
 window.deleteFile = deleteFile;
 window.getDashboardStats = getDashboardStats;

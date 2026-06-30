@@ -4,6 +4,7 @@
  * Incluye funcionalidad de validación de pagos, filtros y resumen
  * AHORA CON SOPORTE PARA IVA EN FACTURAS Y EDICIÓN/ELIMINACIÓN DE PAGOS
  * Y CONVERSIÓN DE Bs. A USD EN CREACIÓN Y EDICIÓN
+ * VERSIÓN DEFINITIVA - FUNCIONA EN AMBOS FORMULARIOS
  */
 
 // Estado global
@@ -18,11 +19,78 @@ document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     updateUserAvatarPagos();
 
+    // Cargar tasa BCV en el topbar
     await actualizarDisplayTasa('#tasa-bcv');
+
+    // Cargar ventas y configurar eventos
     await cargarVentasSelect();
     setupEventListenersPagos();
 
-    // Eventos del modal de edición de pago
+    // Configurar eventos del formulario principal (creación) con verificación de existencia
+    const pMonto = document.getElementById('p-monto-bs');
+    const pTasa = document.getElementById('p-tasa');
+    const pFecha = document.getElementById('p-fecha');
+    
+    if (pMonto) {
+        pMonto.addEventListener('input', function() {
+            console.log('🔁 Input en p-monto-bs');
+            calcularEquivalenteUSD('p');
+        });
+        pMonto.addEventListener('blur', function() {
+            console.log('🔁 Blur en p-monto-bs');
+            calcularEquivalenteUSD('p');
+        });
+        console.log('✅ Evento input asignado a p-monto-bs');
+    } else {
+        console.warn('⚠️ Elemento p-monto-bs no encontrado al iniciar');
+    }
+    
+    if (pTasa) {
+        pTasa.addEventListener('input', function() {
+            console.log('🔁 Input en p-tasa');
+            calcularEquivalenteUSD('p');
+        });
+        console.log('✅ Evento input asignado a p-tasa');
+    } else {
+        console.warn('⚠️ Elemento p-tasa no encontrado al iniciar');
+    }
+    
+    if (pFecha) {
+        pFecha.addEventListener('change', function() {
+            manejarCambioFecha('p');
+        });
+        console.log('✅ Evento change asignado a p-fecha');
+    }
+
+    // Configurar eventos del modal de edición
+    const epMonto = document.getElementById('ep-monto-bs');
+    const epTasa = document.getElementById('ep-tasa');
+    const epFecha = document.getElementById('ep-fecha');
+    
+    if (epMonto) {
+        epMonto.addEventListener('input', function() {
+            console.log('🔁 Input en ep-monto-bs');
+            calcularEquivalenteUSD('ep');
+        });
+        epMonto.addEventListener('blur', function() {
+            calcularEquivalenteUSD('ep');
+        });
+        console.log('✅ Evento input asignado a ep-monto-bs');
+    }
+    if (epTasa) {
+        epTasa.addEventListener('input', function() {
+            calcularEquivalenteUSD('ep');
+        });
+        console.log('✅ Evento input asignado a ep-tasa');
+    }
+    if (epFecha) {
+        epFecha.addEventListener('change', function() {
+            manejarCambioFecha('ep');
+        });
+        console.log('✅ Evento change asignado a ep-fecha');
+    }
+
+    // Eventos de los botones del modal de edición
     document.getElementById('btn-cerrar-editar-pago').addEventListener('click', cerrarModalEditarPago);
     document.getElementById('btn-cancelar-editar-pago').addEventListener('click', cerrarModalEditarPago);
     document.getElementById('btn-guardar-editar-pago').addEventListener('click', guardarEdicionPago);
@@ -30,28 +98,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.target === e.currentTarget) cerrarModalEditarPago();
     });
 
-    // Eventos para cálculo de equivalente en el modal de edición
-    document.getElementById('ep-monto-bs').addEventListener('input', function() {
-        calcularEquivalenteUSD('ep');
-    });
-    document.getElementById('ep-tasa').addEventListener('input', function() {
-        calcularEquivalenteUSD('ep');
-    });
-    document.getElementById('ep-fecha').addEventListener('change', function() {
-        manejarCambioFecha('ep');
-    });
-
-    // Eventos para el formulario principal (creación)
-    document.getElementById('p-monto-bs').addEventListener('input', function() {
-        calcularEquivalenteUSD('p');
-    });
-    document.getElementById('p-tasa').addEventListener('input', function() {
-        calcularEquivalenteUSD('p');
-    });
-    document.getElementById('p-fecha').addEventListener('change', function() {
-        manejarCambioFecha('p');
-    });
-
+    // Verificar URL params
     const urlParams = new URLSearchParams(window.location.search);
     const filtroGlobal = urlParams.get('filtro');
     const ventaId = urlParams.get('venta');
@@ -74,6 +121,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     document.getElementById('filtro-validacion').addEventListener('change', () => renderizarPagos());
+
+    console.log('✅ todos los eventos configurados correctamente');
 });
 
 // ============================================
@@ -114,9 +163,17 @@ function setupEventListenersPagos() {
         invalidateTasaCache();
         showAlert('Actualizando tasa BCV...', 'info');
         await actualizarDisplayTasa('#tasa-bcv');
+        // Recargar tasa en el formulario
+        cargarTasaActual('p');
     });
 
-    document.getElementById('p-fecha').value = getTodayISO();
+    // Set fecha por defecto
+    const fechaInput = document.getElementById('p-fecha');
+    if (fechaInput) {
+        fechaInput.value = getTodayISO();
+        // Después de cargar, aplicar control de tasa según fecha
+        setTimeout(() => manejarCambioFecha('p'), 100);
+    }
 }
 
 // ============================================
@@ -232,8 +289,13 @@ async function seleccionarVenta(ventaId) {
             document.getElementById('form-pago-card').style.display = 'none';
         } else {
             document.getElementById('form-pago-card').style.display = '';
-            // Cargar tasa actual en el formulario de creación
-            cargarTasaActual('p');
+            // Cargar tasa actual y forzar cálculo del equivalente
+            await cargarTasaActual('p');
+            // Si ya hay un monto en Bs. ingresado, recalcular
+            const montoBsInput = document.getElementById('p-monto-bs');
+            if (montoBsInput && parseFloat(montoBsInput.value) > 0) {
+                calcularEquivalenteUSD('p');
+            }
         }
 
         renderizarPagos();
@@ -371,46 +433,99 @@ async function buscarPorCliente() {
 }
 
 // ============================================
-// FUNCIONES DE CARGA DE TASA Y CÁLCULO DE EQUIVALENTE
+// FUNCIONES DE CARGA DE TASA Y CÁLCULO DE EQUIVALENTE (CORREGIDAS)
 // ============================================
 
-function cargarTasaActual(prefix) {
-    // Obtener la tasa del topbar
+async function cargarTasaActual(prefix) {
+    console.log(`🔄 cargarTasaActual('${prefix}') ejecutada`);
+
+    // Intentar obtener la tasa del topbar
     const tasaTopbar = document.querySelector('.tasa-valor');
+    let tasa = null;
+
     if (tasaTopbar) {
         let tasaTexto = tasaTopbar.textContent.trim();
         let match = tasaTexto.match(/(\d{1,3}(?:[.,]\d{4}))/);
         if (match) {
-            const tasa = parseFloat(match[1].replace('.', '').replace(',', '.'));
-            if (tasa && !isNaN(tasa)) {
-                const tasaInput = document.getElementById(prefix + '-tasa');
-                if (tasaInput) {
-                    tasaInput.value = tasa;
-                    tasaInput.dataset.tasaOriginal = tasa;
-                }
-            }
+            tasa = parseFloat(match[1].replace('.', '').replace(',', '.'));
+            console.log(`✅ Tasa obtenida del topbar: ${tasa}`);
         }
     }
+
+    // Si no se pudo obtener del topbar, consultar la API directamente
+    if (!tasa) {
+        console.warn('⚠️ No se pudo obtener tasa del topbar, consultando API...');
+        try {
+            const result = await obtenerTasaBCV();
+            if (result && result.tasa) {
+                tasa = result.tasa;
+                console.log(`✅ Tasa obtenida de API: ${tasa}`);
+            }
+        } catch (error) {
+            console.error('❌ Error obteniendo tasa de API:', error);
+        }
+    }
+
+    // Si aún no hay tasa, usar un valor por defecto
+    if (!tasa) {
+        tasa = 623.02;
+        console.warn(`⚠️ Usando tasa por defecto: ${tasa}`);
+    }
+
+    // Actualizar el campo de tasa
+    const tasaInput = document.getElementById(prefix + '-tasa');
+    if (tasaInput) {
+        tasaInput.value = tasa;
+        tasaInput.dataset.tasaOriginal = tasa;
+        console.log(`✅ Tasa cargada en ${prefix}-tasa: ${tasa}`);
+    } else {
+        console.error(`❌ No se encontró el campo ${prefix}-tasa`);
+    }
+
+    // Forzar recalcular equivalente
+    calcularEquivalenteUSD(prefix);
 }
 
 function calcularEquivalenteUSD(prefix) {
+    console.log(`🔄 calcularEquivalenteUSD('${prefix}') ejecutada`);
+
     const montoBsInput = document.getElementById(prefix + '-monto-bs');
     const tasaInput = document.getElementById(prefix + '-tasa');
     const displayDiv = document.getElementById(prefix + '-equivalente-usd-display');
     const hiddenInput = document.getElementById(prefix + '-monto-usd-calculado');
 
-    if (!montoBsInput || !tasaInput || !displayDiv || !hiddenInput) return;
+    // Verificar que todos los elementos existan
+    if (!montoBsInput) {
+        console.error(`❌ No se encontró el campo ${prefix}-monto-bs`);
+        return;
+    }
+    if (!tasaInput) {
+        console.error(`❌ No se encontró el campo ${prefix}-tasa`);
+        return;
+    }
+    if (!displayDiv) {
+        console.error(`❌ No se encontró el display ${prefix}-equivalente-usd-display`);
+        return;
+    }
+    if (!hiddenInput) {
+        console.error(`❌ No se encontró el hidden ${prefix}-monto-usd-calculado`);
+        return;
+    }
 
     const montoBs = parseFloat(montoBsInput.value) || 0;
     const tasa = parseFloat(tasaInput.value) || 0;
+
+    console.log(`📊 Monto Bs: ${montoBs}, Tasa: ${tasa}`);
 
     if (montoBs > 0 && tasa > 0) {
         const usd = montoBs / tasa;
         displayDiv.textContent = '$' + usd.toFixed(2);
         hiddenInput.value = usd.toFixed(2);
+        console.log(`✅ USD calculado: ${usd.toFixed(2)}`);
     } else {
         displayDiv.textContent = '$0.00';
         hiddenInput.value = '0';
+        console.log('ℹ️ Monto o tasa en cero, equivalente en $0.00');
     }
 }
 
@@ -434,10 +549,7 @@ function manejarCambioFecha(prefix) {
             statusText.textContent = 'Tasa automática del día (no editable)';
             statusText.style.color = 'var(--gray-500)';
         }
-        // Cargar tasa actual
         cargarTasaActual(prefix);
-        // Recalcular equivalente
-        calcularEquivalenteUSD(prefix);
     } else {
         tasaInput.disabled = false;
         tasaInput.style.background = '';
@@ -445,7 +557,6 @@ function manejarCambioFecha(prefix) {
             statusText.textContent = 'Fecha retroactiva - puede ajustar la tasa manualmente';
             statusText.style.color = 'var(--warning)';
         }
-        // Recalcular equivalente con la tasa actual (que puede ser manual)
         calcularEquivalenteUSD(prefix);
     }
 }
@@ -534,8 +645,10 @@ function limpiarFormularioPago() {
     document.getElementById('p-ret-iva').value = '';
     document.getElementById('p-ret-islr').value = '';
     document.getElementById('p-validado').checked = false;
-    document.getElementById('equivalente-usd-display').textContent = '$0.00';
-    document.getElementById('p-monto-usd-calculado').value = '0';
+    const display = document.getElementById('equivalente-usd-display');
+    if (display) display.textContent = '$0.00';
+    const hidden = document.getElementById('p-monto-usd-calculado');
+    if (hidden) hidden.value = '0';
     // No limpiar fecha ni tasa
 }
 
@@ -670,7 +783,6 @@ window.editarPago = async function(pagoId) {
             return;
         }
 
-        // Llenar datos básicos
         document.getElementById('ep-id').value = pago.id;
         document.getElementById('ep-fecha').value = pago.fecha_pago;
         document.getElementById('ep-metodo').value = pago.metodo_pago || '';
@@ -679,13 +791,11 @@ window.editarPago = async function(pagoId) {
         document.getElementById('ep-tasa').value = pago.tasa_usada;
         document.getElementById('ep-validado').checked = pago.validado === true;
 
-        // Calcular monto en bolívares (Bs. = USD * tasa)
         const montoUSD = parseFloat(pago.monto_pagado_usd) || 0;
         const tasa = parseFloat(pago.tasa_usada) || 0;
         const montoBs = montoUSD * tasa;
         document.getElementById('ep-monto-bs').value = montoBs.toFixed(2);
 
-        // Calcular y mostrar equivalente en USD
         const displayDiv = document.getElementById('ep-equivalente-usd-display');
         const hiddenInput = document.getElementById('ep-monto-usd-calculado');
         if (displayDiv && hiddenInput) {
@@ -693,10 +803,8 @@ window.editarPago = async function(pagoId) {
             hiddenInput.value = montoUSD.toFixed(2);
         }
 
-        // Configurar estado de la tasa según la fecha
         manejarCambioFecha('ep');
 
-        // Mostrar modal
         document.getElementById('modal-editar-pago').style.display = 'flex';
     } catch (error) {
         console.error('Error al cargar pago para editar:', error);

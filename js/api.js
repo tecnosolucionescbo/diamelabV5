@@ -1,14 +1,14 @@
 /**
  * Sistema Diamelab - APIs y Servicios Externos
  * Consumo de Tasa BCV y otras APIs
- * VERSIÓN ESTABLE - Tasa dinámica BCV
+ * VERSIÓN ESTABLE - Tasa dinámica BCV con Proxy CORS
  */
 
 // ============================================
 // API DE TASA BCV (OFICIAL + FALLBACK)
 // ============================================
 
-const TASA_CACHE_KEY = 'diamelab_tasa_bcv_v2'; // Llave actualizada para forzar limpieza de caché
+const TASA_CACHE_KEY = 'diamelab_tasa_bcv_v3'; // Actualizado para forzar limpieza de caché
 const TASA_CACHE_TIME = 30 * 60 * 1000; // 30 minutos
 
 async function obtenerTasaBCV() {
@@ -18,7 +18,7 @@ async function obtenerTasaBCV() {
         return cached;
     }
 
-    // Intentar API del BCV primero
+    // 1. Intentar API del BCV primero (Vía Proxy para evitar CORS)
     try {
         const tasaBCV = await fetchTasaBCVOficial();
         if (tasaBCV) {
@@ -26,21 +26,32 @@ async function obtenerTasaBCV() {
             return { tasa: tasaBCV, fuente: 'BCV Oficial' };
         }
     } catch (error) {
-        console.warn('BCV oficial falló, intentando fallback...', error);
+        console.warn('BCV oficial falló, intentando DolarApi...', error);
     }
 
-    // Fallback a MonitorDolar
+    // 2. Fallback Primario a DolarApi (Da la tasa oficial con decimales exactos y soporta CORS)
     try {
-        const tasaMD = await fetchTasaMonitorDolar();
-        if (tasaMD) {
-            cacheTasa(tasaMD);
-            return { tasa: tasaMD, fuente: 'MonitorDolar (Fallback)' };
+        const tasaDolarApi = await fetchTasaFromMonitor();
+        if (tasaDolarApi) {
+            cacheTasa(tasaDolarApi);
+            return { tasa: tasaDolarApi, fuente: 'DolarApi Oficial (Fallback)' };
         }
     } catch (error) {
-        console.warn('MonitorDolar también falló:', error);
+        console.warn('DolarApi también falló, intentando APIs internacionales...', error);
     }
 
-    // Si todo falla, devolver tasa por defecto (última conocida o valor estándar)
+    // 3. Fallback Secundario (APIs internacionales que redondean a 2 decimales)
+    try {
+        const tasaInternacional = await fetchTasaInternacional();
+        if (tasaInternacional) {
+            cacheTasa(tasaInternacional);
+            return { tasa: tasaInternacional, fuente: 'API Internacional (Fallback)' };
+        }
+    } catch (error) {
+        console.warn('APIs internacionales fallaron:', error);
+    }
+
+    // Si todo falla, devolver tasa por defecto (última conocida o valor offline)
     const ultimaTasa = localStorage.getItem('diamelab_ultima_tasa_valida');
     if (ultimaTasa) {
         return { tasa: parseFloat(ultimaTasa), fuente: 'Última tasa guardada (offline)' };
@@ -52,16 +63,17 @@ async function obtenerTasaBCV() {
 
 async function fetchTasaBCVOficial() {
     try {
-        const response = await fetch('https://www.bcv.org.ve/', {
-            method: 'GET',
-            headers: {
-                'Accept': 'text/html',
-            }
-        });
+        // Usamos allorigins como proxy público para saltar el bloqueo CORS del BCV
+        const proxyUrl = 'https://api.allorigins.win/get?url=';
+        const targetUrl = encodeURIComponent('https://www.bcv.org.ve/');
+        
+        const response = await fetch(proxyUrl + targetUrl);
 
         if (!response.ok) return null;
 
-        const html = await response.text();
+        const data = await response.json();
+        const html = data.contents; // El HTML de la página viene aquí adentro
+        
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         
@@ -82,47 +94,14 @@ async function fetchTasaBCVOficial() {
 
         return null;
     } catch (error) {
-        console.warn('Error accediendo a BCV:', error);
-        return null;
-    }
-}
-
-async function fetchTasaMonitorDolar() {
-    try {
-        const apisAlternativas = [
-            'https://api.exchangerate-api.com/v4/latest/USD',
-            'https://open.er-api.com/v6/latest/USD'
-        ];
-
-        for (const apiUrl of apisAlternativas) {
-            try {
-                const response = await fetch(apiUrl, { 
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
-                
-                if (!response.ok) continue;
-                
-                const data = await response.json();
-                
-                if (data.rates && (data.rates.VES || data.rates.VEF)) {
-                    const tasa = data.rates.VES || data.rates.VEF;
-                    if (tasa && tasa > 0) return tasa;
-                }
-            } catch (e) {
-                continue;
-            }
-        }
-
-        return await fetchTasaFromMonitor();
-    } catch (error) {
-        console.warn('Error en fallback MonitorDolar:', error);
+        console.warn('Error scrapeando BCV vía proxy:', error);
         return null;
     }
 }
 
 async function fetchTasaFromMonitor() {
     try {
+        // Esta API trae la tasa oficial del BCV exacta y sí permite CORS
         const response = await fetch('https://ve.dolarapi.com/v1/dolares/oficial', {
             method: 'GET',
             headers: { 'Accept': 'application/json' }
@@ -136,9 +115,37 @@ async function fetchTasaFromMonitor() {
         }
         return null;
     } catch (error) {
-        console.warn('Error en monitor:', error);
+        console.warn('Error en DolarApi:', error);
         return null;
     }
+}
+
+async function fetchTasaInternacional() {
+    const apisAlternativas = [
+        'https://api.exchangerate-api.com/v4/latest/USD',
+        'https://open.er-api.com/v6/latest/USD'
+    ];
+
+    for (const apiUrl of apisAlternativas) {
+        try {
+            const response = await fetch(apiUrl, { 
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+            
+            if (!response.ok) continue;
+            
+            const data = await response.json();
+            
+            if (data.rates && (data.rates.VES || data.rates.VEF)) {
+                const tasa = data.rates.VES || data.rates.VEF;
+                if (tasa && tasa > 0) return tasa;
+            }
+        } catch (e) {
+            continue;
+        }
+    }
+    return null;
 }
 
 function cacheTasa(tasa) {
@@ -749,4 +756,4 @@ window.createUserWithProfile = createUserWithProfile;
 window.updateCliente = updateCliente;
 window.deleteCliente = deleteCliente;
 
-console.log('✅ api.js cargado - versión estable (Tasa BCV dinámica y actualizada)');
+console.log('✅ api.js cargado - versión estable (Tasa BCV dinámica y actualizada con CORS Proxy)');

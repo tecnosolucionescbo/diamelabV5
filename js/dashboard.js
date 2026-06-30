@@ -166,7 +166,7 @@ async function cargarVentasRecientes() {
         if (!ventas || ventas.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7">
+                    <td colspan="9">
                         <div class="empty-state">
                             <div class="empty-state-icon">📄</div>
                             <h3>Sin notas de entrega</h3>
@@ -200,14 +200,45 @@ async function cargarVentasRecientes() {
             const vencimientoClass = diasRestantes < 0 ? 'text-danger' : diasRestantes <= 3 ? 'text-warning' : '';
             const vencimientoText = diasRestantes < 0 ? `Vencido (${Math.abs(diasRestantes)}d)` : `${diasRestantes}d restantes`;
 
+            // === IVA y Total con IVA ===
+            const tieneFactura = v.numero_factura && v.numero_factura.trim() !== '';
+            const montoBase = parseFloat(v.monto_total_usd) || 0;
+            const montoIVA = parseFloat(v.monto_iva) || 0;
+            const totalConIVA = parseFloat(v.total_con_iva) || montoBase;
+
+            // Monto a mostrar (total con IVA si tiene factura, si no, base)
+            const montoMostrar = tieneFactura ? totalConIVA : montoBase;
+            let montoHtml = `<strong>${formatUSD(montoMostrar)}</strong>`;
+            if (tieneFactura) {
+                montoHtml += `<br><small style="color: var(--gray-500);">Base: ${formatUSD(montoBase)}</small>`;
+            }
+
+            // IVA (solo si tiene factura)
+            const ivaHtml = tieneFactura
+                ? `<span style="color: var(--warning); font-weight: 600;">${formatUSD(montoIVA)}</span>`
+                : `<span style="color: var(--gray-400);">-</span>`;
+
+            // === Pagos Validados ===
+            let pagosValidadosHtml = `<span style="color: var(--gray-400);">Sin pagos</span>`;
+            if (v.pagos && v.pagos.length > 0) {
+                const validados = v.pagos.filter(p => p.validado === true);
+                if (validados.length > 0) {
+                    pagosValidadosHtml = `<span class="badge badge-pagada">✅ ${validados.length} validado(s)</span>`;
+                } else {
+                    pagosValidadosHtml = `<span class="badge badge-pendiente">⏳ Sin validar</span>`;
+                }
+            }
+
             return `
                 <tr>
                     <td><strong>${v.correlacion_a2 || 'N/A'}</strong></td>
                     <td>${clienteNombre}</td>
                     <td>${formatDate(v.fecha_emision)}</td>
                     <td class="${vencimientoClass}">${formatDate(v.fecha_vencimiento)} <small>(${vencimientoText})</small></td>
-                    <td><strong>${formatUSD(v.monto_total_usd)}</strong></td>
+                    <td>${montoHtml}</td>
+                    <td style="text-align: center;">${ivaHtml}</td>
                     <td><span class="badge ${badgeClass}">${estadoText}</span></td>
+                    <td style="text-align: center;">${pagosValidadosHtml}</td>
                     <td>${v.sede || 'N/A'}</td>
                 </tr>
             `;
@@ -219,7 +250,7 @@ async function cargarVentasRecientes() {
         console.error('❌ Error cargando ventas recientes:', error);
         document.getElementById('tbody-ventas-recientes').innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; padding: 2rem; color: var(--danger);">
+                <td colspan="9" style="text-align: center; padding: 2rem; color: var(--danger);">
                     Error al cargar los datos: ${error.message}
                 </td>
             </tr>

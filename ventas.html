@@ -129,7 +129,7 @@
                     </div>
                 </div>
 
-                <!-- Tabla de Ventas -->
+                <!-- Tabla de Ventas con columna IVA -->
                 <div class="card">
                     <div class="card-body" style="padding: 0;">
                         <div class="table-container">
@@ -142,6 +142,7 @@
                                         <th>Fecha Emisión</th>
                                         <th>Vencimiento</th>
                                         <th>Monto USD</th>
+                                        <th>IVA</th>
                                         <th>Estado</th>
                                         <th>Factura</th>
                                         <th>Acciones</th>
@@ -149,7 +150,7 @@
                                 </thead>
                                 <tbody id="tbody-ventas">
                                     <tr>
-                                        <td colspan="9" style="text-align: center; padding: 3rem;">
+                                        <td colspan="10" style="text-align: center; padding: 3rem;">
                                             <div class="spinner" style="border-color: var(--gray-200); border-top-color: var(--diamelab-primary);"></div>
                                             <p style="margin-top: 0.5rem; color: var(--gray-400);">Cargando notas de entrega...</p>
                                         </td>
@@ -163,7 +164,7 @@
         </main>
     </div>
 
-    <!-- Modal Nueva Venta -->
+    <!-- Modal Nueva Venta (sin cambios) -->
     <div class="modal-overlay" id="modal-venta" style="display: none; overflow-y: auto;">
         <div class="modal-content" style="max-width: 800px; margin: 2rem auto;">
             <div class="modal-header">

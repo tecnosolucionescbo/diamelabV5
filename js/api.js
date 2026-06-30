@@ -1,14 +1,14 @@
 /**
  * Sistema Diamelab - APIs y Servicios Externos
  * Consumo de Tasa BCV y otras APIs
- * VERSIÓN ESTABLE - tasa 623,0200
+ * VERSIÓN ESTABLE - Tasa dinámica BCV
  */
 
 // ============================================
 // API DE TASA BCV (OFICIAL + FALLBACK)
 // ============================================
 
-const TASA_CACHE_KEY = 'diamelab_tasa_bcv';
+const TASA_CACHE_KEY = 'diamelab_tasa_bcv_v2'; // Llave actualizada para forzar limpieza de caché
 const TASA_CACHE_TIME = 30 * 60 * 1000; // 30 minutos
 
 async function obtenerTasaBCV() {
@@ -47,7 +47,7 @@ async function obtenerTasaBCV() {
     }
 
     // Valor por defecto como último recurso
-    return { tasa: 65.50, fuente: 'Valor por defecto' };
+    return { tasa: 623.0223, fuente: 'Valor por defecto' };
 }
 
 async function fetchTasaBCVOficial() {
@@ -749,4 +749,4 @@ window.createUserWithProfile = createUserWithProfile;
 window.updateCliente = updateCliente;
 window.deleteCliente = deleteCliente;
 
-console.log('✅ api.js cargado - versión estable con tasa 623,0200');
+console.log('✅ api.js cargado - versión estable (Tasa BCV dinámica y actualizada)');

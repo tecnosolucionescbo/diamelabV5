@@ -8,7 +8,7 @@
 // ============================================
 
 const TASA_CACHE_KEY = 'diamelab_tasa_bcv';
-const TASA_CACHE_TIME = 30 * 60 * 1000; // 30 minutos
+const TASA_CACHE_TIME = 5 * 60 * 1000; // 5 minutos (reducido para actualizar más rápido)
 
 async function obtenerTasaBCV() {
     const cached = getCachedTasa();
@@ -17,15 +17,15 @@ async function obtenerTasaBCV() {
         return cached;
     }
 
-    // PRIORIDAD 1: ExchangeRate.host (estable, 6 decimales, sin CORS)
+    // PRIORIDAD 1: PydolarVE (API oficial de Venezuela, 4 decimales)
     try {
-        const tasa = await fetchTasaExchangeRateHost();
+        const tasa = await fetchTasaPydolar();
         if (tasa) {
             cacheTasa(tasa);
-            return { tasa: tasa, fuente: 'ExchangeRate.host' };
+            return { tasa: tasa, fuente: 'PydolarVE (Oficial)' };
         }
     } catch (error) {
-        console.warn('ExchangeRate.host falló, intentando siguiente fuente...', error);
+        console.warn('PydolarVE falló, intentando siguiente fuente...', error);
     }
 
     // PRIORIDAD 2: DolarAPI (alternativa, 4 decimales)
@@ -39,15 +39,26 @@ async function obtenerTasaBCV() {
         console.warn('DolarAPI falló, intentando siguiente fuente...', error);
     }
 
-    // PRIORIDAD 3: PydolarVE (otra alternativa)
+    // PRIORIDAD 3: Proxy alternativo (bcv-api2)
     try {
-        const tasa = await fetchTasaPydolar();
+        const tasa = await fetchTasaProxyAlternativo();
         if (tasa) {
             cacheTasa(tasa);
-            return { tasa: tasa, fuente: 'PydolarVE' };
+            return { tasa: tasa, fuente: 'Proxy Alternativo' };
         }
     } catch (error) {
-        console.warn('PydolarVE falló, intentando siguiente fuente...', error);
+        console.warn('Proxy alternativo falló:', error);
+    }
+
+    // PRIORIDAD 4: ExchangeRate (solo 2 decimales, fallback)
+    try {
+        const tasa = await fetchTasaExchangeRate();
+        if (tasa) {
+            cacheTasa(tasa);
+            return { tasa: tasa, fuente: 'ExchangeRate (fallback)' };
+        }
+    } catch (error) {
+        console.warn('ExchangeRate también falló:', error);
     }
 
     // Último recurso: caché o valor por defecto
@@ -62,21 +73,22 @@ async function obtenerTasaBCV() {
 // FUENTES DE TASA
 // ============================================
 
-// 1. ExchangeRate.host (recomendada, estable, 6 decimales, sin CORS)
-async function fetchTasaExchangeRateHost() {
+// 1. PydolarVE (recomendada, oficial, 4 decimales)
+async function fetchTasaPydolar() {
     try {
-        const response = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=VES', {
+        const response = await fetch('https://pydolarve.org/api/v1/dolar/', {
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         });
         if (!response.ok) return null;
         const data = await response.json();
-        if (data.rates && data.rates.VES) {
-            return parseFloat(data.rates.VES);
+        // La API devuelve: { "usd": { "bcv": 623.0223, ... } }
+        if (data && data.usd && data.usd.bcv) {
+            return parseFloat(data.usd.bcv);
         }
         return null;
     } catch (error) {
-        console.warn('Error en ExchangeRate.host:', error);
+        console.warn('Error en PydolarVE:', error);
         return null;
     }
 }
@@ -100,21 +112,40 @@ async function fetchTasaDolarAPI() {
     }
 }
 
-// 3. PydolarVE (alternativa)
-async function fetchTasaPydolar() {
+// 3. Proxy alternativo (bcv-api2)
+async function fetchTasaProxyAlternativo() {
     try {
-        const response = await fetch('https://pydolarve.org/api/v1/dolar/', {
+        const response = await fetch('https://bcv-api2.vercel.app/api/tasa', {
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         });
         if (!response.ok) return null;
         const data = await response.json();
-        if (data && data.usd && data.usd.bcv) {
-            return parseFloat(data.usd.bcv);
+        if (data.tasa && data.tasa > 0) {
+            return parseFloat(data.tasa);
         }
         return null;
     } catch (error) {
-        console.warn('Error en PydolarVE:', error);
+        console.warn('Error en proxy alternativo:', error);
+        return null;
+    }
+}
+
+// 4. ExchangeRate (fallback, solo 2 decimales)
+async function fetchTasaExchangeRate() {
+    try {
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (data.rates && data.rates.VES) {
+            return parseFloat(data.rates.VES);
+        }
+        return null;
+    } catch (error) {
+        console.warn('Error en ExchangeRate:', error);
         return null;
     }
 }
@@ -144,6 +175,7 @@ function getCachedTasa() {
 
 function invalidateTasaCache() {
     localStorage.removeItem(TASA_CACHE_KEY);
+    localStorage.removeItem('diamelab_ultima_tasa_valida');
 }
 
 // ============================================

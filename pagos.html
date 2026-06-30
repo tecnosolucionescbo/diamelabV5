@@ -179,7 +179,7 @@
                     </div>
                 </div>
 
-                <!-- Formulario de Pago (MODIFICADO) -->
+                <!-- Formulario de Pago -->
                 <div class="card" id="form-pago-card" style="margin-bottom: var(--space-lg); display: none;">
                     <div class="card-header">
                         <h3>Registrar Nuevo Pago</h3>
@@ -191,7 +191,6 @@
                                     <label class="form-label">Fecha de Pago <span class="required">*</span></label>
                                     <input type="date" id="p-fecha" class="form-control" required>
                                 </div>
-                                <!-- CAMPO: Monto en Bs. (ahora el usuario ingresa en bolívares) -->
                                 <div class="form-group">
                                     <label class="form-label">Monto Pagado (Bs.) <span class="required">*</span></label>
                                     <div class="input-group">
@@ -229,14 +228,13 @@
                                 </div>
                             </div>
 
-                            <!-- EQUIVALENTE EN USD (se muestra en grande) -->
+                            <!-- Equivalente en USD (grande) -->
                             <div style="background: var(--gray-50); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); text-align: center; border: 2px solid var(--diamelab-primary);">
                                 <label class="form-label" style="font-size: 0.9rem; color: var(--gray-500);">Equivalente en USD</label>
                                 <div id="equivalente-usd-display" style="font-size: 2rem; font-weight: 700; color: var(--diamelab-primary);">$0.00</div>
                                 <div style="font-size: 0.75rem; color: var(--gray-400);">Calculado automáticamente al ingresar el monto en Bs.</div>
                             </div>
 
-                            <!-- Campo oculto para guardar el monto en USD calculado -->
                             <input type="hidden" id="p-monto-usd-calculado" value="0">
 
                             <div class="form-group" style="margin-bottom: var(--space-md);">
@@ -295,8 +293,6 @@
                                     <div class="form-text">Documento de retencion ISLR</div>
                                 </div>
                             </div>
-
-                            <!-- Eliminamos el campo "Equivalencia en Bs." porque ya tenemos el equivalente en USD -->
                         </form>
                     </div>
                     <div class="card-footer">
@@ -354,9 +350,9 @@
         </main>
     </div>
 
-    <!-- Modal Editar Pago -->
+    <!-- ======== MODAL EDITAR PAGO (ACTUALIZADO) ======== -->
     <div class="modal-overlay" id="modal-editar-pago" style="display: none;">
-        <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-content" style="max-width: 550px;">
             <div class="modal-header">
                 <h3>✏️ Editar Pago</h3>
                 <button class="modal-close" id="btn-cerrar-editar-pago">&times;</button>
@@ -364,17 +360,24 @@
             <div class="modal-body">
                 <form id="form-editar-pago">
                     <input type="hidden" id="ep-id">
+
+                    <!-- Fecha -->
                     <div class="form-group">
                         <label class="form-label">Fecha de Pago <span class="required">*</span></label>
                         <input type="date" id="ep-fecha" class="form-control" required>
                     </div>
+
+                    <!-- Monto en Bs. -->
                     <div class="form-group">
-                        <label class="form-label">Monto Pagado (USD) <span class="required">*</span></label>
+                        <label class="form-label">Monto Pagado (Bs.) <span class="required">*</span></label>
                         <div class="input-group">
-                            <span class="input-group-text">$</span>
-                            <input type="number" id="ep-monto" class="form-control" step="0.01" min="0.01" required>
+                            <span class="input-group-text">Bs.</span>
+                            <input type="number" id="ep-monto-bs" class="form-control" step="0.01" min="0.01" required>
                         </div>
+                        <div class="form-text">Ingrese el monto en bolívares</div>
                     </div>
+
+                    <!-- Método de Pago -->
                     <div class="form-group">
                         <label class="form-label">Método de Pago <span class="required">*</span></label>
                         <select id="ep-metodo" class="form-control form-select" required>
@@ -386,10 +389,34 @@
                             <option value="Binance">Binance</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Referencia / Nro. Operación</label>
-                        <input type="text" id="ep-referencia" class="form-control" placeholder="Nro. de referencia">
+
+                    <!-- Tasa + Referencia (2 columnas) -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
+                        <div class="form-group">
+                            <label class="form-label">Tasa BCV Usada <span class="required">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">Bs./USD</span>
+                                <input type="number" id="ep-tasa" class="form-control" step="0.0001" min="0" required>
+                            </div>
+                            <div class="form-text" id="ep-tasa-status">Tasa automática del día (no editable a menos que cambie la fecha)</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Referencia / Nro. Operación</label>
+                            <input type="text" id="ep-referencia" class="form-control" placeholder="Nro. de referencia">
+                        </div>
                     </div>
+
+                    <!-- Equivalente en USD (grande) -->
+                    <div style="background: var(--gray-50); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); text-align: center; border: 2px solid var(--diamelab-primary);">
+                        <label class="form-label" style="font-size: 0.9rem; color: var(--gray-500);">Equivalente en USD</label>
+                        <div id="ep-equivalente-usd-display" style="font-size: 2rem; font-weight: 700; color: var(--diamelab-primary);">$0.00</div>
+                        <div style="font-size: 0.75rem; color: var(--gray-400);">Calculado automáticamente al ingresar el monto en Bs.</div>
+                    </div>
+
+                    <!-- Campo oculto para guardar el USD calculado -->
+                    <input type="hidden" id="ep-monto-usd-calculado" value="0">
+
+                    <!-- Banco de Origen -->
                     <div class="form-group">
                         <label class="form-label">Banco de Origen</label>
                         <select id="ep-banco" class="form-control">
@@ -421,13 +448,8 @@
                             <option value="0191">BNC (Banco Nacional de Crédito)</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Tasa BCV Usada <span class="required">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text">Bs./USD</span>
-                            <input type="number" id="ep-tasa" class="form-control" step="0.0001" min="0" required>
-                        </div>
-                    </div>
+
+                    <!-- Validado -->
                     <div class="form-group" style="display: flex; align-items: center; gap: var(--space-sm);">
                         <input type="checkbox" id="ep-validado" style="width: 18px; height: 18px; accent-color: var(--success);">
                         <label class="form-label" for="ep-validado" style="margin: 0; cursor: pointer;">✅ Pago validado</label>

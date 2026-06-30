@@ -1,7 +1,7 @@
 /**
  * Sistema Diamelab - Modulo de Pagos
  * Versión con soporte para IVA, edición de pagos y conversión Bs. a USD
- * CORREGIDO: funcionamiento en formulario principal y edición
+ * CORREGIDO: función toggleValidacionPago maneja modo global sin errores
  */
 
 // Estado global
@@ -256,7 +256,6 @@ async function seleccionarVenta(ventaId) {
             document.getElementById('form-pago-card').style.display = 'none';
         } else {
             document.getElementById('form-pago-card').style.display = '';
-            // Cargar tasa y forzar cálculo
             await cargarTasaActual('p');
             const montoBsInput = document.getElementById('p-monto-bs');
             if (montoBsInput && parseFloat(montoBsInput.value) > 0) {
@@ -399,7 +398,7 @@ async function buscarPorCliente() {
 }
 
 // ============================================
-// FUNCIONES DE TASA Y EQUIVALENTE (CORREGIDAS)
+// FUNCIONES DE TASA Y EQUIVALENTE
 // ============================================
 
 async function cargarTasaActual(prefix) {
@@ -443,14 +442,12 @@ async function cargarTasaActual(prefix) {
         console.error(`❌ No se encontró ${prefix}-tasa`);
     }
 
-    // Forzar cálculo
     calcularEquivalenteUSD(prefix);
 }
 
 function calcularEquivalenteUSD(prefix) {
     console.log(`🔄 calcularEquivalenteUSD('${prefix}')`);
 
-    // Determinar IDs según prefijo
     const montoId = prefix + '-monto-bs';
     const tasaId = prefix + '-tasa';
     const displayId = prefix + '-equivalente-usd-display';
@@ -842,7 +839,7 @@ window.eliminarPagoConfirm = async function(pagoId) {
 };
 
 // ============================================
-// TOGGLE VALIDACIÓN
+// TOGGLE VALIDACIÓN (CORREGIDO)
 // ============================================
 
 window.toggleValidacionPago = async function(pagoId, estadoActual) {
@@ -859,7 +856,21 @@ window.toggleValidacionPago = async function(pagoId, estadoActual) {
     try {
         await actualizarValidacionPago(pagoId, nuevoEstado);
         showAlert(`Pago ${nuevoEstado ? 'validado' : 'desmarcado'} correctamente.`, 'success');
-        await seleccionarVenta(ventaSeleccionada.id);
+
+        // === CORRECCIÓN: Verificar si hay venta seleccionada ===
+        if (ventaSeleccionada) {
+            await seleccionarVenta(ventaSeleccionada.id);
+        } else {
+            // Modo global: recargar con el filtro actual
+            const urlParams = new URLSearchParams(window.location.search);
+            const filtro = urlParams.get('filtro');
+            if (filtro) {
+                await cargarPagosGlobales(filtro);
+            } else {
+                // Si no hay filtro, simplemente recargar la vista actual
+                renderizarPagos();
+            }
+        }
     } catch (error) {
         console.error('Error actualizando validación:', error);
         showAlert('Error al actualizar la validación: ' + error.message, 'error');

@@ -668,13 +668,15 @@ async function deleteFile(bucket, path) {
 async function getDashboardStats() {
     const sede = isAdmin() ? null : getUserSede();
 
+    // Obtener todas las ventas no anuladas
     let ventasQuery = supabaseClient
         .from('ventas')
-        .select('estado, monto_total_usd');
+        .select('estado, monto_total_usd, total_con_iva, monto_iva, numero_factura');
     if (sede) ventasQuery = ventasQuery.eq('sede', sede);
     const { data: ventas, error: vError } = await ventasQuery;
     if (vError) throw vError;
 
+    // Obtener todos los pagos (para el total pagado)
     let pagosQuery = supabaseClient
         .from('pagos')
         .select('monto_pagado_usd, venta_id');
@@ -706,8 +708,11 @@ async function getDashboardStats() {
     };
 
     ventas.forEach(v => {
-        const monto = parseFloat(v.monto_total_usd) || 0;
+        // Si está facturada, usar total_con_iva; si no, usar monto_total_usd
+        const tieneFactura = v.numero_factura && v.numero_factura.trim() !== '';
+        const monto = tieneFactura ? (parseFloat(v.total_con_iva) || parseFloat(v.monto_total_usd)) : parseFloat(v.monto_total_usd);
         stats.totalVentas += monto;
+
         if (v.estado === 'pendiente') stats.ventasPendientes++;
         if (v.estado === 'pagada') stats.ventasPagadas++;
         if (v.estado === 'parcial') stats.ventasParciales++;

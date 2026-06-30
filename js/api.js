@@ -138,8 +138,10 @@ async function actualizarDisplayTasa(selector = '.tasa-bcv-display') {
     elements.forEach(el => { el.innerHTML = '<span class="spinner-tasa"></span>'; });
     try {
         const { tasa, fuente } = await obtenerTasaBCV();
+        // Forzar 4 decimales con formato venezolano (coma como separador decimal)
+        const tasaFormateada = tasa.toFixed(4).replace('.', ',');
         elements.forEach(el => {
-            el.innerHTML = `<span class="tasa-valor">${formatNumber(tasa, 4)} Bs./USD</span><span class="tasa-fuente">${fuente}</span>`;
+            el.innerHTML = `<span class="tasa-valor">${tasaFormateada} Bs./USD</span><span class="tasa-fuente">${fuente}</span>`;
         });
         return tasa;
     } catch (error) {

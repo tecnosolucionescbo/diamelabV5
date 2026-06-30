@@ -16,6 +16,19 @@ async function obtenerTasaBCV() {
         console.log('Usando tasa en caché:', cached.tasa);
         return cached;
     }
+
+    // PRIORIDAD 1: DolarAPI (devuelve 4 decimales reales, sin CORS)
+    try {
+        const tasaMD = await fetchTasaFromMonitor();
+        if (tasaMD) {
+            cacheTasa(tasaMD);
+            return { tasa: tasaMD, fuente: 'DolarAPI (4 decimales)' };
+        }
+    } catch (error) {
+        console.warn('DolarAPI falló, intentando siguiente fuente...', error);
+    }
+
+    // PRIORIDAD 2: BCV oficial (scraping - puede fallar por CORS)
     try {
         const tasaBCV = await fetchTasaBCVOficial();
         if (tasaBCV) {
@@ -25,22 +38,25 @@ async function obtenerTasaBCV() {
     } catch (error) {
         console.warn('BCV oficial falló, intentando fallback...', error);
     }
+
+    // PRIORIDAD 3: ExchangeRate (solo 2 decimales)
     try {
         const tasaMD = await fetchTasaMonitorDolar();
         if (tasaMD) {
             cacheTasa(tasaMD);
-            return { tasa: tasaMD, fuente: 'MonitorDolar (Fallback)' };
+            return { tasa: tasaMD, fuente: 'ExchangeRate (fallback)' };
         }
     } catch (error) {
-        console.warn('MonitorDolar también falló:', error);
+        console.warn('ExchangeRate también falló:', error);
     }
+
+    // Último recurso: caché o valor por defecto
     const ultimaTasa = localStorage.getItem('diamelab_ultima_tasa_valida');
     if (ultimaTasa) {
         return { tasa: parseFloat(ultimaTasa), fuente: 'Última tasa guardada (offline)' };
     }
     return { tasa: 65.50, fuente: 'Valor por defecto' };
 }
-
 async function fetchTasaBCVOficial() {
     try {
         const response = await fetch('https://www.bcv.org.ve/', {

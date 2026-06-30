@@ -715,6 +715,44 @@ async function deleteCliente(id) {
     return true;
 }
 
+// ============================================
+// OBTENER TODOS LOS PAGOS CON FILTROS (PARA DASHBOARD)
+// ============================================
+
+async function getAllPagosConFiltro(filtros = {}) {
+    let query = supabaseClient
+        .from('pagos')
+        .select(`
+            *,
+            venta:ventas!inner(id, correlacion_a2, estado, sede, cliente:clientes(razon_social, rif))
+        `);
+
+    // Excluir pagos de ventas anuladas
+    query = query.neq('venta.estado', 'anulada');
+
+    if (filtros.validado !== undefined) {
+        query = query.eq('validado', filtros.validado);
+    }
+    if (filtros.sede) {
+        query = query.eq('venta.sede', filtros.sede);
+    }
+    if (filtros.fecha_desde) {
+        query = query.gte('fecha_pago', filtros.fecha_desde);
+    }
+    if (filtros.fecha_hasta) {
+        query = query.lte('fecha_pago', filtros.fecha_hasta);
+    }
+
+    query = query.order('fecha_pago', { ascending: false });
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+}
+
+// Exportar
+window.getAllPagosConFiltro = getAllPagosConFiltro;
+
 // ============================================================
 // EXPORTAR PARA USO GLOBAL
 // ============================================================

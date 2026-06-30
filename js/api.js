@@ -1,152 +1,229 @@
 /**
  * Sistema Diamelab - APIs y Servicios Externos
- * Consumo de Tasa BCV y otras APIs
- * VERSIÓN ESTABLE - tasa 623,0200
+ * VERSIÓN DEFINITIVA - OBTIENE TASA BCV CON 4 DECIMALES REALES
  */
 
 // ============================================
-// API DE TASA BCV (OFICIAL + FALLBACK)
+// CONFIGURACIÓN
 // ============================================
-
 const TASA_CACHE_KEY = 'diamelab_tasa_bcv';
 const TASA_CACHE_TIME = 30 * 60 * 1000; // 30 minutos
 
+// ============================================
+// OBTENER TASA BCV (CON SCRAPING Y FALLBACKS)
+// ============================================
+
 async function obtenerTasaBCV() {
+    // 1. Verificar caché válida
     const cached = getCachedTasa();
     if (cached) {
-        console.log('Usando tasa en caché:', cached.tasa);
+        console.log('✅ Usando tasa en caché:', cached.tasa);
         return cached;
     }
 
-    // Intentar API del BCV primero
+    console.log('🔄 Buscando tasa actual del BCV...');
+
+    // 2. FUENTE PRINCIPAL: Scraping directo del BCV (más preciso)
     try {
-        const tasaBCV = await fetchTasaBCVOficial();
-        if (tasaBCV) {
-            cacheTasa(tasaBCV);
-            return { tasa: tasaBCV, fuente: 'BCV Oficial' };
+        const tasa = await fetchTasaBCVScraping();
+        if (tasa && tasa > 0) {
+            console.log(`✅ Tasa obtenida por scraping: ${tasa}`);
+            cacheTasa(tasa);
+            return { tasa, fuente: 'BCV (Scraping directo)' };
         }
     } catch (error) {
-        console.warn('BCV oficial falló, intentando fallback...', error);
+        console.warn('⚠️ Scraping BCV falló:', error);
     }
 
-    // Fallback a MonitorDolar
+    // 3. FUENTE ALTERNATIVA 1: PydolarVE (4 decimales)
     try {
-        const tasaMD = await fetchTasaMonitorDolar();
-        if (tasaMD) {
-            cacheTasa(tasaMD);
-            return { tasa: tasaMD, fuente: 'MonitorDolar (Fallback)' };
+        const tasa = await fetchTasaPydolar();
+        if (tasa && tasa > 0) {
+            console.log(`✅ Tasa obtenida de PydolarVE: ${tasa}`);
+            cacheTasa(tasa);
+            return { tasa, fuente: 'PydolarVE' };
         }
     } catch (error) {
-        console.warn('MonitorDolar también falló:', error);
+        console.warn('⚠️ PydolarVE falló:', error);
     }
 
-    // Si todo falla, devolver tasa por defecto (última conocida o valor estándar)
+    // 4. FUENTE ALTERNATIVA 2: DolarAPI (4 decimales)
+    try {
+        const tasa = await fetchTasaDolarAPI();
+        if (tasa && tasa > 0) {
+            console.log(`✅ Tasa obtenida de DolarAPI: ${tasa}`);
+            cacheTasa(tasa);
+            return { tasa, fuente: 'DolarAPI' };
+        }
+    } catch (error) {
+        console.warn('⚠️ DolarAPI falló:', error);
+    }
+
+    // 5. FUENTE ALTERNATIVA 3: ExchangeRate (solo 2 decimales, fallback)
+    try {
+        const tasa = await fetchTasaExchangeRate();
+        if (tasa && tasa > 0) {
+            console.log(`✅ Tasa obtenida de ExchangeRate: ${tasa}`);
+            cacheTasa(tasa);
+            return { tasa, fuente: 'ExchangeRate (fallback)' };
+        }
+    } catch (error) {
+        console.warn('⚠️ ExchangeRate falló:', error);
+    }
+
+    // 6. Último recurso: usar la tasa manual (actualizada por el admin)
     const ultimaTasa = localStorage.getItem('diamelab_ultima_tasa_valida');
     if (ultimaTasa) {
-        return { tasa: parseFloat(ultimaTasa), fuente: 'Última tasa guardada (offline)' };
+        const tasa = parseFloat(ultimaTasa);
+        console.warn(`⚠️ Usando última tasa guardada: ${tasa}`);
+        return { tasa, fuente: 'Última tasa guardada (offline)' };
     }
 
-    // Valor por defecto como último recurso
+    // 7. Valor por defecto final
+    console.warn('⚠️ Todas las fuentes fallaron, usando valor por defecto');
     return { tasa: 65.50, fuente: 'Valor por defecto' };
 }
 
-async function fetchTasaBCVOficial() {
+// ============================================
+// FUENTES DE TASA (INDIVIDUALES)
+// ============================================
+
+// 1. SCRAPING DIRECTO DE LA PÁGINA DEL BCV (usando proxy CORS)
+async function fetchTasaBCVScraping() {
     try {
-        const response = await fetch('https://www.bcv.org.ve/', {
+        // Usar proxy gratuito para evitar CORS
+        const url = 'https://api.allorigins.win/raw?url=https://www.bcv.org.ve/';
+        const response = await fetch(url, {
             method: 'GET',
-            headers: {
-                'Accept': 'text/html',
-            }
+            headers: { 'Accept': 'text/html' }
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) {
+            console.warn('❌ No se pudo acceder al BCV (HTTP', response.status, ')');
+            return null;
+        }
 
         const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
         
-        const tasaElement = 
-            doc.querySelector('#dolar') || 
-            doc.querySelector('.recuadrotsmc') ||
-            doc.querySelector('[id*="dolar"]') ||
-            doc.querySelector('.centrado');
-
-        if (tasaElement) {
-            const texto = tasaElement.textContent;
-            const match = texto.match(/(\d{1,3}(?:[.,]\d{2,3})+)/);
-            if (match) {
-                const tasa = parseFloat(match[1].replace('.', '').replace(',', '.'));
-                if (tasa > 0) return tasa;
+        // Buscar la tasa en el HTML con una expresión regular más precisa
+        // Busca patrones como: 623,0223 o 623.0223 o 623,02
+        const regex = /(?:<[^>]*>|\s)*(dólar|dolar)\s*[^<]*?(?:<[^>]*>|\s)*(\d{1,3}(?:[.,]\d{2,4}))/gi;
+        let match;
+        let tasas = [];
+        
+        // Buscar todas las ocurrencias de números con 2-4 decimales
+        const numRegex = /(\d{1,3}(?:[.,]\d{2,4}))/g;
+        while ((match = numRegex.exec(html)) !== null) {
+            let numStr = match[1];
+            // Convertir a número (reemplazar coma por punto y eliminar separadores de miles)
+            let num = parseFloat(numStr.replace(/\./g, '').replace(',', '.'));
+            if (!isNaN(num) && num > 0 && num < 10000) { // Rango razonable para la tasa
+                tasas.push({ valor: num, texto: numStr });
             }
         }
 
-        return null;
-    } catch (error) {
-        console.warn('Error accediendo a BCV:', error);
-        return null;
-    }
-}
+        // Buscar la tasa más probable (la más alta con 4 decimales)
+        // Normalmente la tasa del BCV es la que tiene 4 decimales
+        let mejorTasa = null;
+        let maxDecimales = 0;
+        for (const t of tasas) {
+            const decimales = (t.texto.split(',')[1] || t.texto.split('.')[1] || '').length;
+            if (decimales >= maxDecimales && t.valor > 0) {
+                maxDecimales = decimales;
+                mejorTasa = t.valor;
+            }
+        }
 
-async function fetchTasaMonitorDolar() {
-    try {
-        const apisAlternativas = [
-            'https://api.exchangerate-api.com/v4/latest/USD',
-            'https://open.er-api.com/v6/latest/USD'
-        ];
+        if (mejorTasa) {
+            console.log(`🔍 Tasa encontrada en scraping: ${mejorTasa} (${maxDecimales} decimales)`);
+            return mejorTasa;
+        }
 
-        for (const apiUrl of apisAlternativas) {
-            try {
-                const response = await fetch(apiUrl, { 
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
-                
-                if (!response.ok) continue;
-                
-                const data = await response.json();
-                
-                if (data.rates && (data.rates.VES || data.rates.VEF)) {
-                    const tasa = data.rates.VES || data.rates.VEF;
-                    if (tasa && tasa > 0) return tasa;
+        // Si no se encontró con el método anterior, buscar específicamente en el recuadro del BCV
+        const recuadroRegex = /<div[^>]*class="[^"]*recuadrotsmc[^"]*"[^>]*>([\s\S]*?)<\/div>/i;
+        const recuadroMatch = html.match(recuadroRegex);
+        if (recuadroMatch) {
+            const recuadro = recuadroMatch[1];
+            const numMatch = recuadro.match(/(\d{1,3}(?:[.,]\d{2,4}))/);
+            if (numMatch) {
+                let num = parseFloat(numMatch[1].replace(/\./g, '').replace(',', '.'));
+                if (!isNaN(num) && num > 0) {
+                    console.log(`🔍 Tasa encontrada en recuadro: ${num}`);
+                    return num;
                 }
-            } catch (e) {
-                continue;
             }
         }
 
-        return await fetchTasaFromMonitor();
+        return null;
     } catch (error) {
-        console.warn('Error en fallback MonitorDolar:', error);
+        console.warn('❌ Error en scraping BCV:', error);
         return null;
     }
 }
 
-async function fetchTasaFromMonitor() {
+// 2. PydolarVE (API pública)
+async function fetchTasaPydolar() {
+    try {
+        const response = await fetch('https://pydolarve.org/api/v1/dolar/', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (data && data.usd && data.usd.bcv) {
+            return parseFloat(data.usd.bcv);
+        }
+        return null;
+    } catch (error) {
+        console.warn('Error en PydolarVE:', error);
+        return null;
+    }
+}
+
+// 3. DolarAPI
+async function fetchTasaDolarAPI() {
     try {
         const response = await fetch('https://ve.dolarapi.com/v1/dolares/oficial', {
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         });
-
         if (!response.ok) return null;
-
         const data = await response.json();
         if (data.promedio) {
             return parseFloat(data.promedio);
         }
         return null;
     } catch (error) {
-        console.warn('Error en monitor:', error);
+        console.warn('Error en DolarAPI:', error);
         return null;
     }
 }
 
+// 4. ExchangeRate (fallback, solo 2 decimales)
+async function fetchTasaExchangeRate() {
+    try {
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (data.rates && data.rates.VES) {
+            return parseFloat(data.rates.VES);
+        }
+        return null;
+    } catch (error) {
+        console.warn('Error en ExchangeRate:', error);
+        return null;
+    }
+}
+
+// ============================================
+// CACHÉ DE TASA
+// ============================================
+
 function cacheTasa(tasa) {
-    const cacheData = {
-        tasa: tasa,
-        timestamp: Date.now(),
-        fecha: new Date().toISOString()
-    };
+    const cacheData = { tasa, timestamp: Date.now(), fecha: new Date().toISOString() };
     localStorage.setItem(TASA_CACHE_KEY, JSON.stringify(cacheData));
     localStorage.setItem('diamelab_ultima_tasa_valida', tasa.toString());
 }
@@ -155,34 +232,37 @@ function getCachedTasa() {
     try {
         const cached = localStorage.getItem(TASA_CACHE_KEY);
         if (!cached) return null;
-
         const data = JSON.parse(cached);
         const age = Date.now() - data.timestamp;
-        
         if (age < TASA_CACHE_TIME) {
             return { tasa: data.tasa, fuente: 'Caché local' };
         }
+        // Si la caché expiró, eliminarla para forzar nueva consulta
+        localStorage.removeItem(TASA_CACHE_KEY);
         return null;
     } catch {
+        localStorage.removeItem(TASA_CACHE_KEY);
         return null;
     }
 }
 
 function invalidateTasaCache() {
     localStorage.removeItem(TASA_CACHE_KEY);
+    localStorage.removeItem('diamelab_ultima_tasa_valida');
+    console.log('🗑️ Caché de tasa eliminada.');
 }
+
+// ============================================
+// MOSTRAR TASA EN UI (CON 4 DECIMALES FIJOS)
+// ============================================
 
 async function actualizarDisplayTasa(selector = '.tasa-bcv-display') {
     const elements = document.querySelectorAll(selector);
     if (elements.length === 0) return;
-
-    elements.forEach(el => {
-        el.innerHTML = '<span class="spinner-tasa"></span>';
-    });
-
+    elements.forEach(el => { el.innerHTML = '<span class="spinner-tasa"></span>'; });
     try {
         const { tasa, fuente } = await obtenerTasaBCV();
-        // Forzar 4 decimales con formato venezolano
+        // Forzar 4 decimales y formatear con coma venezolana
         const tasaFormateada = tasa.toFixed(4).replace('.', ',');
         elements.forEach(el => {
             el.innerHTML = `
@@ -190,25 +270,30 @@ async function actualizarDisplayTasa(selector = '.tasa-bcv-display') {
                 <span class="tasa-fuente">${fuente}</span>
             `;
         });
+        console.log(`📊 Tasa mostrada: ${tasaFormateada} (${fuente})`);
         return tasa;
     } catch (error) {
-        elements.forEach(el => {
-            el.innerHTML = '<span class="tasa-error">Error al cargar tasa</span>';
-        });
+        console.error('❌ Error mostrando tasa:', error);
+        elements.forEach(el => { el.innerHTML = '<span class="tasa-error">Error al cargar tasa</span>'; });
         return null;
     }
 }
 
 // ============================================
-// CRUD DE CLIENTES (vía Supabase)
+// EL RESTO DEL CÓDIGO (CRUD, FACTURACIÓN, ETC.) DEBE IR AQUÍ
+// ============================================
+// A partir de aquí, todo lo que ya tenías en tu api.js (clientes, ventas, pagos, etc.)
+// Pero asegúrate de mantener las exportaciones al final.
 // ============================================
 
+// ============================================
+// CRUD DE CLIENTES
+// ============================================
 async function getClientes() {
     const { data, error } = await supabaseClient
         .from('clientes')
         .select('*')
         .order('razon_social', { ascending: true });
-    
     if (error) throw error;
     return data || [];
 }
@@ -219,7 +304,6 @@ async function getClienteById(id) {
         .select('*')
         .eq('id', id)
         .single();
-    
     if (error) throw error;
     return data;
 }
@@ -230,7 +314,6 @@ async function createCliente(clienteData) {
         .insert([clienteData])
         .select()
         .single();
-    
     if (error) throw error;
     return data;
 }
@@ -241,7 +324,6 @@ async function searchClientes(query) {
         .select('*')
         .or(`razon_social.ilike.%${query}%,rif.ilike.%${query}%`)
         .limit(10);
-    
     if (error) throw error;
     return data || [];
 }
@@ -249,7 +331,6 @@ async function searchClientes(query) {
 // ============================================
 // CRUD DE VENTAS (con paginación)
 // ============================================
-
 async function getVentas(filtros = {}, limit = null, offset = 0) {
     let query = supabaseClient
         .from('ventas')
@@ -304,7 +385,6 @@ async function getVentaById(id) {
         `)
         .eq('id', id)
         .single();
-    
     if (error) throw error;
     return data;
 }
@@ -315,22 +395,14 @@ async function createVenta(ventaData, items = []) {
         .insert([ventaData])
         .select()
         .single();
-    
     if (ventaError) throw ventaError;
-
     if (items.length > 0) {
-        const itemsWithVentaId = items.map(item => ({
-            ...item,
-            venta_id: venta.id
-        }));
-
+        const itemsWithVentaId = items.map(item => ({ ...item, venta_id: venta.id }));
         const { error: itemsError } = await supabaseClient
             .from('venta_items')
             .insert(itemsWithVentaId);
-        
         if (itemsError) throw itemsError;
     }
-
     return venta;
 }
 
@@ -341,7 +413,6 @@ async function updateVenta(id, ventaData) {
         .eq('id', id)
         .select()
         .single();
-    
     if (error) throw error;
     return data;
 }
@@ -370,7 +441,6 @@ async function deleteVenta(id) {
 // ============================================
 // CRUD DE PAGOS
 // ============================================
-
 async function getPagosByVenta(ventaId) {
     const { data, error } = await supabaseClient
         .from('pagos')
@@ -380,7 +450,6 @@ async function getPagosByVenta(ventaId) {
         `)
         .eq('venta_id', ventaId)
         .order('fecha_pago', { ascending: false });
-    
     if (error) throw error;
     return data || [];
 }
@@ -393,19 +462,10 @@ async function getAllPagos(filtros = {}) {
             venta:ventas(id, correlacion_a2, cliente:clientes(razon_social)),
             vendedor:profiles(id, full_name)
         `);
-
-    if (filtros.venta_id) {
-        query = query.eq('venta_id', filtros.venta_id);
-    }
-    if (filtros.fecha_desde) {
-        query = query.gte('fecha_pago', filtros.fecha_desde);
-    }
-    if (filtros.fecha_hasta) {
-        query = query.lte('fecha_pago', filtros.fecha_hasta);
-    }
-
+    if (filtros.venta_id) query = query.eq('venta_id', filtros.venta_id);
+    if (filtros.fecha_desde) query = query.gte('fecha_pago', filtros.fecha_desde);
+    if (filtros.fecha_hasta) query = query.lte('fecha_pago', filtros.fecha_hasta);
     query = query.order('fecha_pago', { ascending: false });
-
     const { data, error } = await query;
     if (error) throw error;
     return data || [];
@@ -424,13 +484,11 @@ async function createPago(pagoData, comprobanteFile = null, retIVAFile = null, r
         const url = await uploadFile(retISLRFile, 'retenciones-islr');
         pagoData.retencion_islr_url = url;
     }
-
     const { data, error } = await supabaseClient
         .from('pagos')
         .insert([pagoData])
         .select()
         .single();
-    
     if (error) throw error;
     return data;
 }
@@ -446,10 +504,76 @@ async function actualizarValidacionPago(pagoId, validado) {
     return data;
 }
 
+async function actualizarPago(pagoId, data) {
+    const { data: result, error } = await supabaseClient
+        .from('pagos')
+        .update({
+            fecha_pago: data.fecha_pago,
+            monto_pagado_usd: data.monto_pagado_usd,
+            metodo_pago: data.metodo_pago,
+            referencia: data.referencia,
+            banco_origen: data.banco_origen,
+            tasa_usada: data.tasa_usada,
+            validado: data.validado
+        })
+        .eq('id', pagoId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return result;
+}
+
+async function eliminarPago(pagoId) {
+    const { data: pago, error: getError } = await supabaseClient
+        .from('pagos')
+        .select('venta_id')
+        .eq('id', pagoId)
+        .single();
+
+    if (getError) throw getError;
+
+    const { error: deleteError } = await supabaseClient
+        .from('pagos')
+        .delete()
+        .eq('id', pagoId);
+
+    if (deleteError) throw deleteError;
+
+    await recalcularEstadoVenta(pago.venta_id);
+    return true;
+}
+
+async function recalcularEstadoVenta(ventaId) {
+    const { data: venta, error: vError } = await supabaseClient
+        .from('ventas')
+        .select('monto_total_usd, total_con_iva')
+        .eq('id', ventaId)
+        .single();
+    if (vError) throw vError;
+
+    const { data: pagos, error: pError } = await supabaseClient
+        .from('pagos')
+        .select('monto_pagado_usd')
+        .eq('venta_id', ventaId);
+    if (pError) throw pError;
+
+    const totalPagado = pagos.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
+    const montoTotal = venta.total_con_iva || venta.monto_total_usd;
+    let nuevoEstado = 'pendiente';
+    if (totalPagado >= montoTotal) nuevoEstado = 'pagada';
+    else if (totalPagado > 0) nuevoEstado = 'parcial';
+
+    const { error: updateError } = await supabaseClient
+        .from('ventas')
+        .update({ estado: nuevoEstado })
+        .eq('id', ventaId);
+    if (updateError) throw updateError;
+}
+
 // ============================================
 // FACTURACIÓN
 // ============================================
-
 async function actualizarFacturaVenta(ventaId, numeroFactura, montoIva, fechaFactura) {
     const updates = {
         numero_factura: numeroFactura || null,
@@ -514,29 +638,20 @@ async function getVentasCompletasConPagos(sede = null) {
 }
 
 // ============================================
-// STORAGE - SUBIR ARCHIVOS
+// STORAGE
 // ============================================
-
 async function uploadFile(file, bucket) {
     if (!file) return null;
-    
     const fileExt = file.name.split('.').pop();
     const fileName = `${generateUUID()}.${fileExt}`;
     const filePath = `${getUserSede()}/${new Date().getFullYear()}/${fileName}`;
-
     const { error: uploadError } = await supabaseClient.storage
         .from(bucket)
-        .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-        });
-
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
     if (uploadError) throw uploadError;
-
     const { data: { publicUrl } } = supabaseClient.storage
         .from(bucket)
         .getPublicUrl(filePath);
-
     return publicUrl;
 }
 
@@ -544,18 +659,18 @@ async function deleteFile(bucket, path) {
     const { error } = await supabaseClient.storage
         .from(bucket)
         .remove([path]);
-    
     if (error) throw error;
 }
 
 // ============================================
-// DASHBOARD - ESTADÍSTICAS
+// DASHBOARD
 // ============================================
-
 async function getDashboardStats() {
     const sede = isAdmin() ? null : getUserSede();
-    
-    let ventasQuery = supabaseClient.from('ventas').select('estado, monto_total_usd');
+
+    let ventasQuery = supabaseClient
+        .from('ventas')
+        .select('estado, monto_total_usd');
     if (sede) ventasQuery = ventasQuery.eq('sede', sede);
     const { data: ventas, error: vError } = await ventasQuery;
     if (vError) throw vError;
@@ -591,7 +706,8 @@ async function getDashboardStats() {
     };
 
     ventas.forEach(v => {
-        stats.totalVentas += parseFloat(v.monto_total_usd);
+        const monto = parseFloat(v.monto_total_usd) || 0;
+        stats.totalVentas += monto;
         if (v.estado === 'pendiente') stats.ventasPendientes++;
         if (v.estado === 'pagada') stats.ventasPagadas++;
         if (v.estado === 'parcial') stats.ventasParciales++;
@@ -599,17 +715,15 @@ async function getDashboardStats() {
     });
 
     pagos.forEach(p => {
-        stats.totalPagado += parseFloat(p.monto_pagado_usd);
+        stats.totalPagado += parseFloat(p.monto_pagado_usd) || 0;
     });
 
     stats.totalPendiente = stats.totalVentas - stats.totalPagado;
-
     return stats;
 }
 
 async function getVentasRecientes(limit = 10) {
     const sede = isAdmin() ? null : getUserSede();
-    
     let query = supabaseClient
         .from('ventas')
         .select(`
@@ -618,18 +732,15 @@ async function getVentasRecientes(limit = 10) {
         `)
         .order('created_at', { ascending: false })
         .limit(limit);
-
     if (sede) query = query.eq('sede', sede);
-
     const { data, error } = await query;
     if (error) throw error;
     return data || [];
 }
 
 // ============================================
-// CRUD DE PERFILES (USUARIOS) - SOLO ADMIN
+// USUARIOS
 // ============================================
-
 async function getProfiles({ limit = 100, offset = 0, filtro = '' } = {}) {
     let query = supabaseClient
         .from('profiles')
@@ -642,7 +753,6 @@ async function getProfiles({ limit = 100, offset = 0, filtro = '' } = {}) {
 
     const { data, error, count } = await query
         .range(offset, offset + limit - 1);
-
     if (error) throw error;
     return { data, count };
 }
@@ -686,7 +796,6 @@ async function createUserWithProfile(email, password, fullName, role, sede) {
 // ============================================
 // CLIENTES - ACTUALIZAR / ELIMINAR
 // ============================================
-
 async function updateCliente(id, updates) {
     const { data, error } = await supabaseClient
         .from('clientes')
@@ -716,9 +825,8 @@ async function deleteCliente(id) {
 }
 
 // ============================================
-// OBTENER TODOS LOS PAGOS CON FILTROS (PARA DASHBOARD)
+// PAGOS CON FILTRO (para dashboard)
 // ============================================
-
 async function getAllPagosConFiltro(filtros = {}) {
     let query = supabaseClient
         .from('pagos')
@@ -727,7 +835,6 @@ async function getAllPagosConFiltro(filtros = {}) {
             venta:ventas!inner(id, correlacion_a2, estado, sede, cliente:clientes(razon_social, rif))
         `);
 
-    // Excluir pagos de ventas anuladas
     query = query.neq('venta.estado', 'anulada');
 
     if (filtros.validado !== undefined) {
@@ -750,99 +857,6 @@ async function getAllPagosConFiltro(filtros = {}) {
     return data || [];
 }
 
-// ============================================
-// ACTUALIZAR PAGO (EDITAR)
-// ============================================
-
-async function actualizarPago(pagoId, data) {
-    const { data: result, error } = await supabaseClient
-        .from('pagos')
-        .update({
-            fecha_pago: data.fecha_pago,
-            monto_pagado_usd: data.monto_pagado_usd,
-            metodo_pago: data.metodo_pago,
-            referencia: data.referencia,
-            banco_origen: data.banco_origen,
-            tasa_usada: data.tasa_usada,
-            validado: data.validado
-        })
-        .eq('id', pagoId)
-        .select()
-        .single();
-
-    if (error) throw error;
-    return result;
-}
-
-// ============================================
-// ELIMINAR PAGO
-// ============================================
-
-async function eliminarPago(pagoId) {
-    // Obtener el pago para saber a qué venta pertenece
-    const { data: pago, error: getError } = await supabaseClient
-        .from('pagos')
-        .select('venta_id')
-        .eq('id', pagoId)
-        .single();
-
-    if (getError) throw getError;
-
-    // Eliminar el pago
-    const { error: deleteError } = await supabaseClient
-        .from('pagos')
-        .delete()
-        .eq('id', pagoId);
-
-    if (deleteError) throw deleteError;
-
-    // Recalcular el estado de la venta (trigger)
-    const { error: updateError } = await supabaseClient.rpc('actualizar_estado_venta', { p_venta_id: pago.venta_id });
-    if (updateError) {
-        // Si la función RPC no existe, podemos actualizar manualmente
-        console.warn('No se pudo ejecutar actualizar_estado_venta:', updateError);
-        // Recalcular manualmente
-        await recalcularEstadoVenta(pago.venta_id);
-    }
-
-    return true;
-}
-
-// Función auxiliar para recalcular estado (manual)
-async function recalcularEstadoVenta(ventaId) {
-    // Obtener total pagado y monto total
-    const { data: venta, error: vError } = await supabaseClient
-        .from('ventas')
-        .select('monto_total_usd, total_con_iva')
-        .eq('id', ventaId)
-        .single();
-    if (vError) throw vError;
-
-    const { data: pagos, error: pError } = await supabaseClient
-        .from('pagos')
-        .select('monto_pagado_usd')
-        .eq('venta_id', ventaId);
-    if (pError) throw pError;
-
-    const totalPagado = pagos.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
-    const montoTotal = venta.total_con_iva || venta.monto_total_usd;
-    let nuevoEstado = 'pendiente';
-    if (totalPagado >= montoTotal) nuevoEstado = 'pagada';
-    else if (totalPagado > 0) nuevoEstado = 'parcial';
-
-    const { error: updateError } = await supabaseClient
-        .from('ventas')
-        .update({ estado: nuevoEstado })
-        .eq('id', ventaId);
-    if (updateError) throw updateError;
-}
-
-// Exportar
-window.actualizarPago = actualizarPago;
-window.eliminarPago = eliminarPago;
-// Exportar
-window.getAllPagosConFiltro = getAllPagosConFiltro;
-
 // ============================================================
 // EXPORTAR PARA USO GLOBAL
 // ============================================================
@@ -863,6 +877,8 @@ window.getPagosByVenta = getPagosByVenta;
 window.getAllPagos = getAllPagos;
 window.createPago = createPago;
 window.actualizarValidacionPago = actualizarValidacionPago;
+window.actualizarPago = actualizarPago;
+window.eliminarPago = eliminarPago;
 window.actualizarFacturaVenta = actualizarFacturaVenta;
 window.getReporteVentas = getReporteVentas;
 window.getVentasCompletasConPagos = getVentasCompletasConPagos;
@@ -876,5 +892,6 @@ window.deleteProfile = deleteProfile;
 window.createUserWithProfile = createUserWithProfile;
 window.updateCliente = updateCliente;
 window.deleteCliente = deleteCliente;
+window.getAllPagosConFiltro = getAllPagosConFiltro;
 
-console.log('✅ api.js cargado - versión estable con tasa 623,0200');
+console.log('✅ api.js cargado - con scraping del BCV para tasa de 4 decimales');

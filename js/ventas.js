@@ -911,17 +911,15 @@ async function guardarFacturacion() {
     try {
         showLoading('#btn-guardar-facturacion', 'Guardando...');
 
-        console.log('🔍 Enviando datos a actualizarFacturaVenta...');
         await actualizarFacturaVenta(ventaId, numeroFactura, montoIva, fechaFactura);
 
         hideLoading('#btn-guardar-facturacion');
-        console.log('✅ Factura guardada exitosamente');
+        console.log('✅ Factura guardada/actualizada exitosamente');
 
         showAlert('Factura asociada exitosamente.', 'success');
         cerrarModalFacturacion();
         await cargarVentas(true);
 
-        // Si el modal de detalle está abierto, actualizarlo
         if (document.getElementById('modal-ver-venta').style.display === 'flex' && viewingVentaId) {
             await verVenta(viewingVentaId);
         }

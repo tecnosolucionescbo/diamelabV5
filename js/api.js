@@ -1,7 +1,8 @@
 /**
  * Sistema Diamelab - APIs y Servicios Externos
  * Consumo de Tasa BCV y otras APIs
- * VERSIÓN ESTABLE - tasa 623,0200
+ * VERSIÓN ACTUALIZADA - Usa API pública de rafnixg para tasa oficial BCV
+ * Muestra 4 decimales (ej. 623,0223)
  */
 
 // ============================================
@@ -9,7 +10,7 @@
 // ============================================
 
 const TASA_CACHE_KEY = 'diamelab_tasa_bcv';
-const TASA_CACHE_TIME = 30 * 60 * 1000; // 30 minutos
+const TASA_CACHE_TIME = 5 * 60 * 1000; // 5 minutos (cambia según necesidad)
 
 async function obtenerTasaBCV() {
     const cached = getCachedTasa();
@@ -18,18 +19,18 @@ async function obtenerTasaBCV() {
         return cached;
     }
 
-    // Intentar API del BCV primero
+    // Intentar API del BCV primero (rafnixg)
     try {
         const tasaBCV = await fetchTasaBCVOficial();
         if (tasaBCV) {
             cacheTasa(tasaBCV);
-            return { tasa: tasaBCV, fuente: 'BCV Oficial' };
+            return { tasa: tasaBCV, fuente: 'BCV Oficial (rafnixg)' };
         }
     } catch (error) {
         console.warn('BCV oficial falló, intentando fallback...', error);
     }
 
-    // Fallback a MonitorDolar
+    // Fallback a MonitorDolar (tasas de referencia internacional)
     try {
         const tasaMD = await fetchTasaMonitorDolar();
         if (tasaMD) {
@@ -50,43 +51,45 @@ async function obtenerTasaBCV() {
     return { tasa: 65.50, fuente: 'Valor por defecto' };
 }
 
+// ============================================
+// FUENTE PRINCIPAL: API pública rafnixg (BCV)
+// ============================================
 async function fetchTasaBCVOficial() {
     try {
-        const response = await fetch('https://www.bcv.org.ve/', {
+        const response = await fetch('https://bcv-api.rafnixg.dev/rates/', {
             method: 'GET',
-            headers: {
-                'Accept': 'text/html',
-            }
+            headers: { 'Accept': 'application/json' }
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        
-        const tasaElement = 
-            doc.querySelector('#dolar') || 
-            doc.querySelector('.recuadrotsmc') ||
-            doc.querySelector('[id*="dolar"]') ||
-            doc.querySelector('.centrado');
+        const data = await response.json();
 
-        if (tasaElement) {
-            const texto = tasaElement.textContent;
-            const match = texto.match(/(\d{1,3}(?:[.,]\d{2,3})+)/);
-            if (match) {
-                const tasa = parseFloat(match[1].replace('.', '').replace(',', '.'));
-                if (tasa > 0) return tasa;
+        // La API puede devolver un objeto con las tasas actuales
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+            if (data.USD && typeof data.USD === 'number') {
+                return data.USD;
+            }
+        }
+
+        // O puede devolver un arreglo histórico (el último elemento es el más reciente)
+        if (Array.isArray(data) && data.length > 0) {
+            const last = data[data.length - 1];
+            if (last && last.USD && typeof last.USD === 'number') {
+                return last.USD;
             }
         }
 
         return null;
     } catch (error) {
-        console.warn('Error accediendo a BCV:', error);
+        console.warn('Error al consultar API BCV (rafnixg):', error);
         return null;
     }
 }
 
+// ============================================
+// FALLBACK: MonitorDolar (tasas internacionales)
+// ============================================
 async function fetchTasaMonitorDolar() {
     try {
         const apisAlternativas = [
@@ -96,7 +99,7 @@ async function fetchTasaMonitorDolar() {
 
         for (const apiUrl of apisAlternativas) {
             try {
-                const response = await fetch(apiUrl, { 
+                const response = await fetch(apiUrl, {
                     method: 'GET',
                     headers: { 'Accept': 'application/json' }
                 });
@@ -114,6 +117,7 @@ async function fetchTasaMonitorDolar() {
             }
         }
 
+        // Último intento con DolarAPI.com (promedio)
         return await fetchTasaFromMonitor();
     } catch (error) {
         console.warn('Error en fallback MonitorDolar:', error);
@@ -141,6 +145,9 @@ async function fetchTasaFromMonitor() {
     }
 }
 
+// ============================================
+// CACHÉ Y ALMACENAMIENTO LOCAL
+// ============================================
 function cacheTasa(tasa) {
     const cacheData = {
         tasa: tasa,
@@ -172,6 +179,9 @@ function invalidateTasaCache() {
     localStorage.removeItem(TASA_CACHE_KEY);
 }
 
+// ============================================
+// ACTUALIZAR DISPLAY DE TASA (CON 4 DECIMALES)
+// ============================================
 async function actualizarDisplayTasa(selector = '.tasa-bcv-display') {
     const elements = document.querySelectorAll(selector);
     if (elements.length === 0) return;
@@ -182,7 +192,7 @@ async function actualizarDisplayTasa(selector = '.tasa-bcv-display') {
 
     try {
         const { tasa, fuente } = await obtenerTasaBCV();
-        // Forzar 4 decimales con formato venezolano
+        // Formatear a 4 decimales con coma como separador decimal (ej. 623,0223)
         const tasaFormateada = tasa.toFixed(4).replace('.', ',');
         elements.forEach(el => {
             el.innerHTML = `
@@ -837,10 +847,9 @@ async function recalcularEstadoVenta(ventaId) {
     if (updateError) throw updateError;
 }
 
-// Exportar
+// Exportar funciones adicionales
 window.actualizarPago = actualizarPago;
 window.eliminarPago = eliminarPago;
-// Exportar
 window.getAllPagosConFiltro = getAllPagosConFiltro;
 
 // ============================================================
@@ -877,4 +886,4 @@ window.createUserWithProfile = createUserWithProfile;
 window.updateCliente = updateCliente;
 window.deleteCliente = deleteCliente;
 
-console.log('✅ api.js cargado - versión estable con tasa 623,0200');
+console.log('✅ api.js cargado - versión con tasa BCV (rafnixg) y 4 decimales');

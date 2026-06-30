@@ -142,7 +142,6 @@
                                 <p class="form-label">Cliente</p>
                                 <p style="font-weight: 600;" id="info-cliente">-</p>
                             </div>
-                            <!-- Monto Base (si hay factura) -->
                             <div id="info-monto-base-container" style="display: none;">
                                 <p class="form-label">Monto Base (USD)</p>
                                 <p style="font-weight: 600; color: var(--gray-600);" id="info-monto-base">$0.00</p>
@@ -159,7 +158,6 @@
                                 <p class="form-label">Saldo Pendiente (USD)</p>
                                 <p style="font-size: 1.125rem; font-weight: 700; color: var(--danger);" id="info-saldo">$0.00</p>
                             </div>
-                            <!-- IVA y Total con IVA (si hay factura) -->
                             <div id="info-iva-container" style="display: none;">
                                 <p class="form-label">IVA (16%)</p>
                                 <p style="font-weight: 600; color: var(--warning);" id="info-iva">$0.00</p>
@@ -169,7 +167,6 @@
                                 <p style="font-size: 1.125rem; font-weight: 700; color: var(--diamelab-accent);" id="info-total-factura">$0.00</p>
                             </div>
                         </div>
-                        <!-- Barra de progreso -->
                         <div style="margin-top: var(--space-md);">
                             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--gray-500); margin-bottom: 4px;">
                                 <span>Progreso de pago</span>
@@ -348,7 +345,119 @@
         </main>
     </div>
 
-    <!-- Scripts -->
+    <!-- Modal Editar Pago -->
+    <div class="modal-overlay" id="modal-editar-pago" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>✏️ Editar Pago</h3>
+                <button class="modal-close" id="btn-cerrar-editar-pago">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="form-editar-pago">
+                    <input type="hidden" id="ep-id">
+                    <div class="form-group">
+                        <label class="form-label">Fecha de Pago <span class="required">*</span></label>
+                        <input type="date" id="ep-fecha" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Monto Pagado (USD) <span class="required">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="ep-monto" class="form-control" step="0.01" min="0.01" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Método de Pago <span class="required">*</span></label>
+                        <select id="ep-metodo" class="form-control form-select" required>
+                            <option value="Transferencia">Transferencia</option>
+                            <option value="Pago Movil">Pago Movil</option>
+                            <option value="Divisas Efectivo">Divisas Efectivo</option>
+                            <option value="Bs Efectivo">Bs. Efectivo</option>
+                            <option value="Zelle">Zelle</option>
+                            <option value="Binance">Binance</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Referencia / Nro. Operación</label>
+                        <input type="text" id="ep-referencia" class="form-control" placeholder="Nro. de referencia">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Banco de Origen</label>
+                        <select id="ep-banco" class="form-control">
+                            <option value="">Seleccione un banco...</option>
+                            <option value="0001">Banco Central de Venezuela</option>
+                            <option value="0102">Banco de Venezuela</option>
+                            <option value="0104">Venezolano de Crédito</option>
+                            <option value="0105">Mercantil</option>
+                            <option value="0108">Banco Provincial (BBVA)</option>
+                            <option value="0114">Bancaribe</option>
+                            <option value="0115">Banco Exterior</option>
+                            <option value="0128">Banco Caroní</option>
+                            <option value="0134">Banesco</option>
+                            <option value="0137">Banco Sofitasa</option>
+                            <option value="0138">Banco Plaza</option>
+                            <option value="0146">Bangente</option>
+                            <option value="0151">BFC Banco Fondo Común</option>
+                            <option value="0156">100% Banco</option>
+                            <option value="0157">DelSur</option>
+                            <option value="0163">Banco del Tesoro</option>
+                            <option value="0166">Banco Agrícola de Venezuela</option>
+                            <option value="0168">Bancrecer</option>
+                            <option value="0169">Mi Banco</option>
+                            <option value="0171">Banco Activo</option>
+                            <option value="0172">Bancamiga</option>
+                            <option value="0174">Banplus</option>
+                            <option value="0175">Banco Bicentenario</option>
+                            <option value="0177">Banfanb</option>
+                            <option value="0191">BNC (Banco Nacional de Crédito)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tasa BCV Usada <span class="required">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">Bs./USD</span>
+                            <input type="number" id="ep-tasa" class="form-control" step="0.0001" min="0" required>
+                        </div>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: var(--space-sm);">
+                        <input type="checkbox" id="ep-validado" style="width: 18px; height: 18px; accent-color: var(--success);">
+                        <label class="form-label" for="ep-validado" style="margin: 0; cursor: pointer;">✅ Pago validado</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancelar-editar-pago">Cancelar</button>
+                <button class="btn btn-primary" id="btn-guardar-editar-pago">Actualizar Pago</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Contraseña (respaldo) -->
+    <div class="modal-overlay" id="modal-password" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>🔐 Contraseña de Seguridad</h3>
+                <button class="modal-close" id="btn-cerrar-password">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--gray-500); margin-bottom: var(--space-md);">
+                    Ingrese la contraseña para descargar este respaldo.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">Contraseña</label>
+                    <input type="password" id="input-password" class="form-control" placeholder="Ingrese la contraseña..." autofocus>
+                    <div id="password-error" style="color: var(--danger); font-size: 0.875rem; margin-top: 4px; display: none;">
+                        ❌ Contraseña incorrecta. Intente nuevamente.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancelar-password">Cancelar</button>
+                <button class="btn btn-primary" id="btn-verificar-password">Verificar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/supabase-config.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/api.js"></script>

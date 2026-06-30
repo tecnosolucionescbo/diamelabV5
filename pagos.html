@@ -9,7 +9,7 @@
 </head>
 <body>
     <div class="app-layout">
-        <!-- Sidebar -->
+        <!-- Sidebar (igual que antes) -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <img src="assets/logo-diamelab.jpg" alt="Diamelab">
@@ -179,7 +179,7 @@
                     </div>
                 </div>
 
-                <!-- Formulario de Pago -->
+                <!-- Formulario de Pago (CREACIÓN) -->
                 <div class="card" id="form-pago-card" style="margin-bottom: var(--space-lg); display: none;">
                     <div class="card-header">
                         <h3>Registrar Nuevo Pago</h3>
@@ -220,7 +220,7 @@
                                         <span class="input-group-text">Bs./USD</span>
                                         <input type="number" id="p-tasa" class="form-control" step="0.0001" min="0" placeholder="0.0000" required>
                                     </div>
-                                    <div class="form-text" id="tasa-status">Tasa automática del día (no editable a menos que cambie la fecha)</div>
+                                    <div class="form-text" id="p-tasa-status">Tasa automática del día (no editable a menos que cambie la fecha)</div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Referencia / Nro. Operacion</label>
@@ -228,19 +228,21 @@
                                 </div>
                             </div>
 
-                            <!-- Equivalente en USD (grande) -->
+                            <!-- EQUIVALENTE EN USD (CORREGIDO: id="p-equivalente-usd-display") -->
                             <div style="background: var(--gray-50); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); text-align: center; border: 2px solid var(--diamelab-primary);">
                                 <label class="form-label" style="font-size: 0.9rem; color: var(--gray-500);">Equivalente en USD</label>
-                                <div id="equivalente-usd-display" style="font-size: 2rem; font-weight: 700; color: var(--diamelab-primary);">$0.00</div>
+                                <div id="p-equivalente-usd-display" style="font-size: 2rem; font-weight: 700; color: var(--diamelab-primary);">$0.00</div>
                                 <div style="font-size: 0.75rem; color: var(--gray-400);">Calculado automáticamente al ingresar el monto en Bs.</div>
                             </div>
 
+                            <!-- Campo oculto para guardar el monto en USD calculado -->
                             <input type="hidden" id="p-monto-usd-calculado" value="0">
 
                             <div class="form-group" style="margin-bottom: var(--space-md);">
                                 <label class="form-label">Banco de Origen</label>
                                 <select id="p-banco" class="form-control">
                                     <option value="" disabled selected>Seleccione un banco...</option>
+                                    <!-- opciones de bancos -->
                                     <option value="0001">Banco Central de Venezuela</option>
                                     <option value="0102">Banco de Venezuela</option>
                                     <option value="0104">Venezolano de Crédito</option>
@@ -350,7 +352,7 @@
         </main>
     </div>
 
-    <!-- ======== MODAL EDITAR PAGO (ACTUALIZADO) ======== -->
+    <!-- Modal Editar Pago -->
     <div class="modal-overlay" id="modal-editar-pago" style="display: none;">
         <div class="modal-content" style="max-width: 550px;">
             <div class="modal-header">
@@ -361,13 +363,11 @@
                 <form id="form-editar-pago">
                     <input type="hidden" id="ep-id">
 
-                    <!-- Fecha -->
                     <div class="form-group">
                         <label class="form-label">Fecha de Pago <span class="required">*</span></label>
                         <input type="date" id="ep-fecha" class="form-control" required>
                     </div>
 
-                    <!-- Monto en Bs. -->
                     <div class="form-group">
                         <label class="form-label">Monto Pagado (Bs.) <span class="required">*</span></label>
                         <div class="input-group">
@@ -377,7 +377,6 @@
                         <div class="form-text">Ingrese el monto en bolívares</div>
                     </div>
 
-                    <!-- Método de Pago -->
                     <div class="form-group">
                         <label class="form-label">Método de Pago <span class="required">*</span></label>
                         <select id="ep-metodo" class="form-control form-select" required>
@@ -390,7 +389,6 @@
                         </select>
                     </div>
 
-                    <!-- Tasa + Referencia (2 columnas) -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
                         <div class="form-group">
                             <label class="form-label">Tasa BCV Usada <span class="required">*</span></label>
@@ -406,17 +404,14 @@
                         </div>
                     </div>
 
-                    <!-- Equivalente en USD (grande) -->
                     <div style="background: var(--gray-50); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); text-align: center; border: 2px solid var(--diamelab-primary);">
                         <label class="form-label" style="font-size: 0.9rem; color: var(--gray-500);">Equivalente en USD</label>
                         <div id="ep-equivalente-usd-display" style="font-size: 2rem; font-weight: 700; color: var(--diamelab-primary);">$0.00</div>
                         <div style="font-size: 0.75rem; color: var(--gray-400);">Calculado automáticamente al ingresar el monto en Bs.</div>
                     </div>
 
-                    <!-- Campo oculto para guardar el USD calculado -->
                     <input type="hidden" id="ep-monto-usd-calculado" value="0">
 
-                    <!-- Banco de Origen -->
                     <div class="form-group">
                         <label class="form-label">Banco de Origen</label>
                         <select id="ep-banco" class="form-control">
@@ -449,7 +444,6 @@
                         </select>
                     </div>
 
-                    <!-- Validado -->
                     <div class="form-group" style="display: flex; align-items: center; gap: var(--space-sm);">
                         <input type="checkbox" id="ep-validado" style="width: 18px; height: 18px; accent-color: var(--success);">
                         <label class="form-label" for="ep-validado" style="margin: 0; cursor: pointer;">✅ Pago validado</label>

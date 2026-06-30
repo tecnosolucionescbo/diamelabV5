@@ -17,23 +17,23 @@ async function obtenerTasaBCV() {
         return cached;
     }
 
-    // PRIORIDAD 1: Proxy BCV (devuelve tasa oficial con 4 decimales)
+    // PRIORIDAD 1: PydolarVE (API oficial de Venezuela, 4 decimales, sin CORS)
     try {
-        const tasaBCV = await fetchTasaFromMonitor();
-        if (tasaBCV) {
-            cacheTasa(tasaBCV);
-            return { tasa: tasaBCV, fuente: 'BCV Oficial (Proxy)' };
+        const tasa = await fetchTasaPydolar();
+        if (tasa) {
+            cacheTasa(tasa);
+            return { tasa: tasa, fuente: 'PydolarVE (Oficial)' };
         }
     } catch (error) {
-        console.warn('Proxy BCV falló, intentando siguiente fuente...', error);
+        console.warn('PydolarVE falló, intentando siguiente fuente...', error);
     }
 
     // PRIORIDAD 2: DolarAPI (alternativa, 4 decimales)
     try {
-        const tasaDolarAPI = await fetchDolarAPI();
-        if (tasaDolarAPI) {
-            cacheTasa(tasaDolarAPI);
-            return { tasa: tasaDolarAPI, fuente: 'DolarAPI' };
+        const tasa = await fetchTasaDolarAPI();
+        if (tasa) {
+            cacheTasa(tasa);
+            return { tasa: tasa, fuente: 'DolarAPI' };
         }
     } catch (error) {
         console.warn('DolarAPI falló, intentando siguiente fuente...', error);
@@ -41,10 +41,10 @@ async function obtenerTasaBCV() {
 
     // PRIORIDAD 3: ExchangeRate (solo 2 decimales, fallback)
     try {
-        const tasaMD = await fetchTasaMonitorDolar();
-        if (tasaMD) {
-            cacheTasa(tasaMD);
-            return { tasa: tasaMD, fuente: 'ExchangeRate (fallback)' };
+        const tasa = await fetchTasaExchangeRate();
+        if (tasa) {
+            cacheTasa(tasa);
+            return { tasa: tasa, fuente: 'ExchangeRate (fallback)' };
         }
     } catch (error) {
         console.warn('ExchangeRate también falló:', error);
@@ -62,27 +62,29 @@ async function obtenerTasaBCV() {
 // FUENTES DE TASA
 // ============================================
 
-// Proxy que devuelve la tasa oficial del BCV (sin CORS)
-async function fetchTasaFromMonitor() {
+// 1. PydolarVE (recomendada, oficial, 4 decimales)
+async function fetchTasaPydolar() {
     try {
-        const response = await fetch('https://bcv-api.vercel.app/api/tasa', {
+        const response = await fetch('https://pydolarve.org/api/v1/dolar/', {
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         });
         if (!response.ok) return null;
         const data = await response.json();
-        if (data.tasa && data.tasa > 0) {
-            return parseFloat(data.tasa);
+        // La API devuelve un objeto con las tasas, buscamos la del BCV
+        // Ejemplo: { "usd": { "bcv": 623.0223, ... } }
+        if (data && data.usd && data.usd.bcv) {
+            return parseFloat(data.usd.bcv);
         }
         return null;
     } catch (error) {
-        console.warn('Error en proxy BCV:', error);
+        console.warn('Error en PydolarVE:', error);
         return null;
     }
 }
 
-// DolarAPI (alternativa)
-async function fetchDolarAPI() {
+// 2. DolarAPI (alternativa, 4 decimales)
+async function fetchTasaDolarAPI() {
     try {
         const response = await fetch('https://ve.dolarapi.com/v1/dolares/oficial', {
             method: 'GET',
@@ -100,8 +102,8 @@ async function fetchDolarAPI() {
     }
 }
 
-// ExchangeRate (fallback, solo 2 decimales)
-async function fetchTasaMonitorDolar() {
+// 3. ExchangeRate (fallback, solo 2 decimales)
+async function fetchTasaExchangeRate() {
     try {
         const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD', {
             method: 'GET',

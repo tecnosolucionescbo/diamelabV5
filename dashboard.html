@@ -125,16 +125,29 @@
                         <div class="stat-value" id="stat-pendientes-count">0</div>
                         <div class="stat-sub">Sin pago registrado</div>
                     </div>
-                    <!-- NUEVAS TARJETAS -->
-                    <div class="stat-card success" id="stat-card-validados">
+                    <!-- Pagos Validados -->
+                    <div class="stat-card success" id="stat-card-validados" style="cursor:pointer;">
                         <div class="stat-label">✅ Pagos Validados</div>
                         <div class="stat-value" id="stat-pagos-validados">0</div>
                         <div class="stat-sub">Pagos confirmados exitosamente</div>
                     </div>
-                    <div class="stat-card warning" id="stat-card-pendientes">
+                    <!-- Pagos Pendientes de Validar -->
+                    <div class="stat-card warning" id="stat-card-pendientes" style="cursor:pointer;">
                         <div class="stat-label">⏳ Pagos por Validar</div>
                         <div class="stat-value" id="stat-pagos-pendientes-validar">0</div>
                         <div class="stat-sub">Pagos pendientes de confirmación</div>
+                    </div>
+                    <!-- Facturas Emitidas -->
+                    <div class="stat-card info" id="stat-card-facturas-emitidas" style="cursor:pointer;">
+                        <div class="stat-label">📄 Facturas Emitidas</div>
+                        <div class="stat-value" id="stat-facturas-emitidas">0</div>
+                        <div class="stat-sub">Notas con factura asociada</div>
+                    </div>
+                    <!-- Facturas Pendientes -->
+                    <div class="stat-card warning" id="stat-card-facturas-pendientes" style="cursor:pointer;">
+                        <div class="stat-label">📄 Facturas Pendientes</div>
+                        <div class="stat-value" id="stat-facturas-pendientes">0</div>
+                        <div class="stat-sub">Notas sin factura</div>
                     </div>
                 </div>
 

@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ Dashboard: DOM cargado');
 
     try {
-        console.log('🔍 Verificando autenticación...');
         const isAuth = await protectRoute();
         if (!isAuth) {
             console.warn('⛔ No autenticado');
@@ -19,15 +18,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateUserAvatar();
         console.log('✅ Navegación inicializada');
 
-        console.log('🔍 Cargando tasa BCV...');
         await actualizarDisplayTasa('#tasa-bcv');
         console.log('✅ Tasa BCV cargada');
 
-        console.log('🔍 Cargando estadísticas...');
         await cargarEstadisticas();
         console.log('✅ Estadísticas cargadas');
 
-        console.log('🔍 Cargando ventas recientes...');
         await cargarVentasRecientes();
         console.log('✅ Ventas recientes cargadas');
 
@@ -61,19 +57,57 @@ function updateUserAvatar() {
 
 async function cargarEstadisticas() {
     try {
-        console.log('🔍 Obteniendo estadísticas desde getDashboardStats...');
-        const stats = await getDashboardStats();
-        console.log('📊 Estadísticas recibidas:', stats);
+        console.log('🔍 Obteniendo estadísticas...');
 
+        // 1. Estadísticas de ventas (ya existentes)
+        const stats = await getDashboardStats();
+
+        // 2. Estadísticas de validación de pagos
+        const { data: pagos, error } = await supabaseClient
+            .from('pagos')
+            .select('validado, venta:ventas!inner(estado)')
+            .neq('venta.estado', 'anulada');
+
+        if (error) throw error;
+
+        const totalPagos = pagos.length;
+        const validados = pagos.filter(p => p.validado === true).length;
+        const pendientes = totalPagos - validados;
+
+        // Actualizar DOM
         document.getElementById('stat-total-ventas').textContent = formatUSD(stats.totalVentas);
         document.getElementById('stat-total-pagado').textContent = formatUSD(stats.totalPagado);
         document.getElementById('stat-total-pendiente').textContent = formatUSD(Math.max(0, stats.totalPendiente));
         document.getElementById('stat-pendientes-count').textContent = stats.ventasPendientes;
 
+        // Resumen por estado
         document.getElementById('res-pendientes').textContent = stats.ventasPendientes;
         document.getElementById('res-parciales').textContent = stats.ventasParciales;
         document.getElementById('res-pagadas').textContent = stats.ventasPagadas;
         document.getElementById('res-anuladas').textContent = stats.ventasAnuladas;
+
+        // NUEVO: Actualizar tarjetas de validación de pagos
+        document.getElementById('stat-pagos-validados').textContent = validados;
+        document.getElementById('stat-pagos-pendientes-validar').textContent = pendientes;
+
+        // Asignar enlaces a las tarjetas
+        const cardValidados = document.getElementById('stat-pagos-validados').closest('.stat-card');
+        if (cardValidados) {
+            cardValidados.style.cursor = 'pointer';
+            cardValidados.title = 'Ver pagos validados';
+            cardValidados.onclick = () => {
+                window.location.href = 'pagos.html?filtro=validados';
+            };
+        }
+
+        const cardPendientes = document.getElementById('stat-pagos-pendientes-validar').closest('.stat-card');
+        if (cardPendientes) {
+            cardPendientes.style.cursor = 'pointer';
+            cardPendientes.title = 'Ver pagos pendientes de validar';
+            cardPendientes.onclick = () => {
+                window.location.href = 'pagos.html?filtro=pendientes';
+            };
+        }
 
         console.log('✅ Estadísticas renderizadas correctamente');
 
@@ -96,7 +130,7 @@ async function cargarVentasRecientes() {
                 <tr>
                     <td colspan="7">
                         <div class="empty-state">
-                            <div class="empty-state-icon">📄</div>
+                            <div class="empty-state-icon">&#128196;</div>
                             <h3>Sin notas de entrega</h3>
                             <p>No hay notas de entrega registradas aún. Cree la primera desde el módulo de Ventas.</p>
                         </div>
@@ -155,6 +189,7 @@ async function cargarVentasRecientes() {
     }
 }
 
+// Exportar funciones
 window.updateUserAvatar = updateUserAvatar;
 window.cargarEstadisticas = cargarEstadisticas;
 window.cargarVentasRecientes = cargarVentasRecientes;

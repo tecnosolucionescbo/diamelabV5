@@ -2,14 +2,13 @@
  * Sistema Diamelab - Modulo de Pagos
  * Registro de pagos con comprobantes, retenciones y métodos de Venezuela
  * Incluye funcionalidad de validación de pagos, filtros y resumen
- * Soporte para filtro global desde dashboard y venta específica
+ * AHORA CON SOPORTE PARA IVA EN FACTURAS
  */
 
 // Estado global
 let ventasCache = [];
 let ventaSeleccionada = null;
 let pagosCache = [];
-let modoGlobal = false; // indica si estamos viendo todos los pagos con filtro
 
 document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = await protectRoute();
@@ -21,56 +20,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cargar tasa BCV
     await actualizarDisplayTasa('#tasa-bcv');
 
-    // Cargar ventas para selector (siempre útil)
+    // Cargar ventas para selector
     await cargarVentasSelect();
 
-    // Verificar si viene con filtro desde el dashboard
+    // Setup event listeners
+    setupEventListenersPagos();
+
+    // Verificar si hay venta en URL params
     const urlParams = new URLSearchParams(window.location.search);
     const filtroGlobal = urlParams.get('filtro');
     const ventaId = urlParams.get('venta');
 
     if (filtroGlobal && !ventaId) {
         // Modo: mostrar todos los pagos con filtro
-        modoGlobal = true;
         document.getElementById('select-venta').disabled = true;
         document.getElementById('buscar-a2').disabled = true;
         document.getElementById('buscar-cliente-pago').disabled = true;
         document.getElementById('btn-buscar-venta').disabled = true;
 
-        // Ocultar el formulario de registro de pagos y la info de nota
         document.getElementById('form-pago-card').style.display = 'none';
         document.getElementById('info-venta-card').style.display = 'none';
-
-        // Mostrar historial de pagos
         document.getElementById('historial-pagos-card').style.display = '';
 
-        // Cargar todos los pagos con el filtro
         await cargarPagosGlobales(filtroGlobal);
-        // Setup event listeners para el filtro local en modo global
-        document.getElementById('filtro-validacion').addEventListener('change', () => {
-            // En modo global, el filtro local reaplica sobre los datos ya cargados
-            renderizarPagosGlobales();
-        });
         return;
     }
 
-    // Modo normal: selección de venta
-    modoGlobal = false;
-    // Setup event listeners normales
-    setupEventListenersPagos();
-
-    // Si hay ventaId en URL, cargarla
     if (ventaId) {
         document.getElementById('select-venta').value = ventaId;
         await seleccionarVenta(ventaId);
     }
 
-    // Evento del filtro de validación local (cuando hay venta seleccionada)
+    // Evento del filtro de validación
     document.getElementById('filtro-validacion').addEventListener('change', () => renderizarPagos());
 });
 
 // ============================================
-// INICIALIZACION (para modo normal)
+// INICIALIZACION
 // ============================================
 
 function updateUserAvatarPagos() {
@@ -123,7 +109,7 @@ function setupEventListenersPagos() {
 }
 
 // ============================================
-// CARGAR VENTAS PARA SELECTOR (modo normal)
+// CARGAR VENTAS PARA SELECTOR
 // ============================================
 
 async function cargarVentasSelect() {
@@ -134,6 +120,8 @@ async function cargarVentasSelect() {
                 id,
                 correlacion_a2,
                 monto_total_usd,
+                total_con_iva,
+                numero_factura,
                 estado,
                 sede,
                 fecha_emision,
@@ -151,7 +139,8 @@ async function cargarVentasSelect() {
             ventasCache.map(v => {
                 const cliente = v.cliente ? v.cliente.razon_social : 'N/A';
                 const saldoInfo = v.estado === 'pagada' ? ' [PAGADA]' : '';
-                return `<option value="${v.id}">${v.correlacion_a2} - ${cliente} (${v.sede})${saldoInfo}</option>`;
+                const facturaInfo = v.numero_factura ? ' 🧾' : '';
+                return `<option value="${v.id}">${v.correlacion_a2} - ${cliente} (${v.sede})${saldoInfo}${facturaInfo}</option>`;
             }).join('');
 
     } catch (error) {
@@ -161,7 +150,7 @@ async function cargarVentasSelect() {
 }
 
 // ============================================
-// SELECCIONAR VENTA (modo normal)
+// SELECCIONAR VENTA (con soporte para IVA)
 // ============================================
 
 async function seleccionarVenta(ventaId) {
@@ -172,22 +161,58 @@ async function seleccionarVenta(ventaId) {
         }
         ventaSeleccionada = venta;
 
+        // Cargar pagos de esta venta
         pagosCache = await getPagosByVenta(ventaId);
 
-        const totalPagado = pagosCache.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
-        const saldo = parseFloat(venta.monto_total_usd) - totalPagado;
-        const porcentaje = parseFloat(venta.monto_total_usd) > 0 
-            ? Math.min(100, (totalPagado / parseFloat(venta.monto_total_usd)) * 100) 
-            : 0;
+        // Determinar el monto total a pagar (base o con IVA si está facturada)
+        const tieneFactura = venta.numero_factura && venta.numero_factura.trim() !== '';
+        const montoTotalAPagar = tieneFactura ? (venta.total_con_iva || venta.monto_total_usd) : venta.monto_total_usd;
+        const montoBase = venta.monto_total_usd;
+        const montoIVA = venta.monto_iva || 0;
 
+        // Calcular totales con el monto correcto
+        const totalPagado = pagosCache.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
+        const saldo = montoTotalAPagar - totalPagado;
+        const porcentaje = montoTotalAPagar > 0 ? Math.min(100, (totalPagado / montoTotalAPagar) * 100) : 0;
+
+        // Actualizar UI info
         document.getElementById('info-a2').textContent = venta.correlacion_a2;
         document.getElementById('info-cliente').textContent = venta.cliente ? venta.cliente.razon_social : 'N/A';
-        document.getElementById('info-monto').textContent = formatUSD(venta.monto_total_usd);
+        document.getElementById('info-monto').textContent = formatUSD(montoTotalAPagar);
         document.getElementById('info-pagado').textContent = formatUSD(totalPagado);
         document.getElementById('info-saldo').textContent = formatUSD(Math.max(0, saldo));
         document.getElementById('info-porcentaje').textContent = porcentaje.toFixed(0) + '%';
         document.getElementById('barra-progreso').style.width = porcentaje + '%';
 
+        // Cambiar la etiqueta del monto total
+        const labelMonto = document.getElementById('info-monto-label');
+        if (tieneFactura) {
+            labelMonto.textContent = 'Total Factura (USD)';
+        } else {
+            labelMonto.textContent = 'Monto Total (USD)';
+        }
+
+        // Mostrar/ocultar campos de IVA
+        const containerBase = document.getElementById('info-monto-base-container');
+        const containerIVA = document.getElementById('info-iva-container');
+        const containerTotalFactura = document.getElementById('info-total-factura-container');
+
+        if (tieneFactura) {
+            containerBase.style.display = '';
+            document.getElementById('info-monto-base').textContent = formatUSD(montoBase);
+            
+            containerIVA.style.display = '';
+            document.getElementById('info-iva').textContent = formatUSD(montoIVA);
+            
+            containerTotalFactura.style.display = '';
+            document.getElementById('info-total-factura').textContent = formatUSD(montoTotalAPagar);
+        } else {
+            containerBase.style.display = 'none';
+            containerIVA.style.display = 'none';
+            containerTotalFactura.style.display = 'none';
+        }
+
+        // Badge de estado
         const badgeEl = document.getElementById('venta-estado-badge');
         const badgeClasses = {
             'pendiente': 'badge-pendiente',
@@ -196,12 +221,15 @@ async function seleccionarVenta(ventaId) {
             'anulada': 'badge-anulada'
         };
         badgeEl.className = 'badge ' + (badgeClasses[venta.estado] || 'badge-pendiente');
-        badgeEl.textContent = { 'pendiente': 'Pendiente', 'parcial': 'Parcial', 'pagada': 'Pagada', 'anulada': 'Anulada' }[venta.estado] || venta.estado;
+        const estadoLabels = { 'pendiente': 'Pendiente', 'parcial': 'Parcial', 'pagada': 'Pagada', 'anulada': 'Anulada' };
+        badgeEl.textContent = estadoLabels[venta.estado] || venta.estado;
 
+        // Mostrar cards
         document.getElementById('info-venta-card').style.display = '';
         document.getElementById('historial-pagos-card').style.display = '';
 
-        if (venta.estado === 'pagada') {
+        // Mostrar formulario solo si no está pagada completamente
+        if (venta.estado === 'pagada' || saldo <= 0.01) {
             document.getElementById('form-pago-card').style.display = 'none';
         } else {
             document.getElementById('form-pago-card').style.display = '';
@@ -210,10 +238,6 @@ async function seleccionarVenta(ventaId) {
                 tasaEl.value = venta.tasa_bcv_aplicada;
             }
         }
-
-        // Restaurar título del historial
-        const titulo = document.querySelector('#historial-pagos-card .card-header h3');
-        if (titulo) titulo.textContent = 'Historial de Pagos';
 
         renderizarPagos();
 
@@ -232,7 +256,7 @@ function ocultarDetalleVenta() {
 }
 
 // ============================================
-// BUSCAR VENTAS (modo normal)
+// BUSCAR VENTAS
 // ============================================
 
 async function buscarPorA2() {
@@ -249,6 +273,8 @@ async function buscarPorA2() {
                 id,
                 correlacion_a2,
                 monto_total_usd,
+                total_con_iva,
+                numero_factura,
                 estado,
                 sede,
                 fecha_emision,
@@ -274,7 +300,8 @@ async function buscarPorA2() {
             select.innerHTML = '<option value="">Seleccione una nota...</option>' +
                 data.map(v => {
                     const cliente = v.cliente ? v.cliente.razon_social : 'N/A';
-                    return `<option value="${v.id}">${v.correlacion_a2} - ${cliente} (${v.sede})</option>`;
+                    const facturaInfo = v.numero_factura ? ' 🧾' : '';
+                    return `<option value="${v.id}">${v.correlacion_a2} - ${cliente} (${v.sede})${facturaInfo}</option>`;
                 }).join('');
             showAlert(`Se encontraron ${data.length} notas. Seleccione del listado.`, 'info');
         }
@@ -313,6 +340,8 @@ async function buscarPorCliente() {
                 id,
                 correlacion_a2,
                 monto_total_usd,
+                total_con_iva,
+                numero_factura,
                 estado,
                 sede,
                 fecha_emision,
@@ -335,7 +364,8 @@ async function buscarPorCliente() {
         select.innerHTML = '<option value="">Seleccione una nota...</option>' +
             ventas.map(v => {
                 const cliente = v.cliente ? v.cliente.razon_social : 'N/A';
-                return `<option value="${v.id}">${v.correlacion_a2} - ${cliente} (${v.sede})</option>`;
+                const facturaInfo = v.numero_factura ? ' 🧾' : '';
+                return `<option value="${v.id}">${v.correlacion_a2} - ${cliente} (${v.sede})${facturaInfo}</option>`;
             }).join('');
 
         showAlert(`Se encontraron ${ventas.length} notas. Seleccione del listado.`, 'info');
@@ -362,7 +392,7 @@ function actualizarEquivalenciaBsPago() {
 }
 
 // ============================================
-// GUARDAR PAGO (modo normal)
+// GUARDAR PAGO (con IVA)
 // ============================================
 
 async function guardarPago() {
@@ -391,8 +421,13 @@ async function guardarPago() {
             return;
         }
 
+        // Determinar el monto total a pagar (con IVA si está facturada)
+        const tieneFactura = ventaSeleccionada.numero_factura && ventaSeleccionada.numero_factura.trim() !== '';
+        const montoTotalAPagar = tieneFactura ? (ventaSeleccionada.total_con_iva || ventaSeleccionada.monto_total_usd) : ventaSeleccionada.monto_total_usd;
+
         const totalPagado = pagosCache.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
-        const saldo = parseFloat(ventaSeleccionada.monto_total_usd) - totalPagado;
+        const saldo = montoTotalAPagar - totalPagado;
+
         if (montoPagado > saldo + 0.01) {
             const confirmed = await confirmAction(`El monto (${formatUSD(montoPagado)}) excede el saldo pendiente (${formatUSD(saldo)}). Desea continuar?`);
             if (!confirmed) return;
@@ -446,7 +481,7 @@ function limpiarFormularioPago() {
 }
 
 // ============================================
-// RENDERIZAR PAGOS (modo normal, con filtro local)
+// RENDERIZAR PAGOS
 // ============================================
 
 function renderizarPagos() {
@@ -536,10 +571,6 @@ function renderizarPagos() {
     actualizarResumen();
 }
 
-// ============================================
-// ACTUALIZAR RESUMEN DE VALIDACIÓN
-// ============================================
-
 function actualizarResumen() {
     const total = pagosCache.length;
     const validados = pagosCache.filter(p => p.validado === true).length;
@@ -551,7 +582,7 @@ function actualizarResumen() {
 }
 
 // ============================================
-// TOGGLE VALIDACIÓN (modo normal)
+// TOGGLE VALIDACIÓN DE PAGO
 // ============================================
 
 window.toggleValidacionPago = async function(pagoId, estadoActual) {
@@ -576,7 +607,7 @@ window.toggleValidacionPago = async function(pagoId, estadoActual) {
 };
 
 // ============================================
-// MODO GLOBAL (todos los pagos con filtro)
+// PAGOS GLOBALES (desde Dashboard)
 // ============================================
 
 async function cargarPagosGlobales(filtro) {
@@ -596,7 +627,6 @@ async function cargarPagosGlobales(filtro) {
         pagosCache = data;
         ventaSeleccionada = null;
 
-        // Actualizar resumen
         const total = pagosCache.length;
         const validados = pagosCache.filter(p => p.validado === true).length;
         const pendientes = total - validados;
@@ -605,7 +635,6 @@ async function cargarPagosGlobales(filtro) {
         document.getElementById('total-validados').textContent = validados;
         document.getElementById('total-pendientes-validacion').textContent = pendientes;
 
-        // Renderizar pagos globales (sin botones de validación para no administradores)
         renderizarPagosGlobales();
 
     } catch (error) {
@@ -630,27 +659,9 @@ function renderizarPagosGlobales() {
         return;
     }
 
-    // Aplicar filtro local adicional (en modo global también se usa el select de filtro)
-    const filtroLocal = document.getElementById('filtro-validacion').value;
-    let pagosFiltrados = pagosCache;
-    if (filtroLocal === 'validados') {
-        pagosFiltrados = pagosCache.filter(p => p.validado === true);
-    } else if (filtroLocal === 'pendientes') {
-        pagosFiltrados = pagosCache.filter(p => p.validado !== true);
-    }
-
-    if (pagosFiltrados.length === 0) {
-        tbody.innerHTML = `
-            <tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--gray-400);">
-                No hay pagos ${filtroLocal === 'validados' ? 'validados' : filtroLocal === 'pendientes' ? 'pendientes' : ''} para mostrar.
-            </td></tr>
-        `;
-        return;
-    }
-
     const isAdminUser = isAdmin();
 
-    tbody.innerHTML = pagosFiltrados.map(p => {
+    tbody.innerHTML = pagosCache.map(p => {
         const metodoLabels = {
             'Transferencia': 'Transferencia',
             'Pago Movil': 'Pago Movil',
@@ -713,7 +724,6 @@ window.toggleValidacionPagoGlobal = async function(pagoId, estadoActual) {
     try {
         await actualizarValidacionPago(pagoId, nuevoEstado);
         showAlert(`Pago ${nuevoEstado ? 'validado' : 'desmarcado'} correctamente.`, 'success');
-        // Recargar la lista de pagos globales manteniendo el filtro
         const filtro = new URLSearchParams(window.location.search).get('filtro');
         if (filtro) {
             await cargarPagosGlobales(filtro);
@@ -732,4 +742,3 @@ window.buscarPorA2 = buscarPorA2;
 window.buscarPorCliente = buscarPorCliente;
 window.toggleValidacionPago = toggleValidacionPago;
 window.toggleValidacionPagoGlobal = toggleValidacionPagoGlobal;
-window.cargarPagosGlobales = cargarPagosGlobales;

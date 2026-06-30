@@ -750,6 +750,96 @@ async function getAllPagosConFiltro(filtros = {}) {
     return data || [];
 }
 
+// ============================================
+// ACTUALIZAR PAGO (EDITAR)
+// ============================================
+
+async function actualizarPago(pagoId, data) {
+    const { data: result, error } = await supabaseClient
+        .from('pagos')
+        .update({
+            fecha_pago: data.fecha_pago,
+            monto_pagado_usd: data.monto_pagado_usd,
+            metodo_pago: data.metodo_pago,
+            referencia: data.referencia,
+            banco_origen: data.banco_origen,
+            tasa_usada: data.tasa_usada,
+            validado: data.validado
+        })
+        .eq('id', pagoId)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return result;
+}
+
+// ============================================
+// ELIMINAR PAGO
+// ============================================
+
+async function eliminarPago(pagoId) {
+    // Obtener el pago para saber a qué venta pertenece
+    const { data: pago, error: getError } = await supabaseClient
+        .from('pagos')
+        .select('venta_id')
+        .eq('id', pagoId)
+        .single();
+
+    if (getError) throw getError;
+
+    // Eliminar el pago
+    const { error: deleteError } = await supabaseClient
+        .from('pagos')
+        .delete()
+        .eq('id', pagoId);
+
+    if (deleteError) throw deleteError;
+
+    // Recalcular el estado de la venta (trigger)
+    const { error: updateError } = await supabaseClient.rpc('actualizar_estado_venta', { p_venta_id: pago.venta_id });
+    if (updateError) {
+        // Si la función RPC no existe, podemos actualizar manualmente
+        console.warn('No se pudo ejecutar actualizar_estado_venta:', updateError);
+        // Recalcular manualmente
+        await recalcularEstadoVenta(pago.venta_id);
+    }
+
+    return true;
+}
+
+// Función auxiliar para recalcular estado (manual)
+async function recalcularEstadoVenta(ventaId) {
+    // Obtener total pagado y monto total
+    const { data: venta, error: vError } = await supabaseClient
+        .from('ventas')
+        .select('monto_total_usd, total_con_iva')
+        .eq('id', ventaId)
+        .single();
+    if (vError) throw vError;
+
+    const { data: pagos, error: pError } = await supabaseClient
+        .from('pagos')
+        .select('monto_pagado_usd')
+        .eq('venta_id', ventaId);
+    if (pError) throw pError;
+
+    const totalPagado = pagos.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
+    const montoTotal = venta.total_con_iva || venta.monto_total_usd;
+    let nuevoEstado = 'pendiente';
+    if (totalPagado >= montoTotal) nuevoEstado = 'pagada';
+    else if (totalPagado > 0) nuevoEstado = 'parcial';
+
+    const { error: updateError } = await supabaseClient
+        .from('ventas')
+        .update({ estado: nuevoEstado })
+        .eq('id', ventaId);
+    if (updateError) throw updateError;
+}
+
+// Exportar
+window.actualizarPago = actualizarPago;
+window.eliminarPago = eliminarPago;
 // Exportar
 window.getAllPagosConFiltro = getAllPagosConFiltro;
 

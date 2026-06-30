@@ -2,7 +2,7 @@
  * Sistema Diamelab - Modulo de Pagos
  * Registro de pagos con comprobantes, retenciones y métodos de Venezuela
  * Incluye funcionalidad de validación de pagos, filtros y resumen
- * AHORA CON SOPORTE PARA IVA EN FACTURAS
+ * AHORA CON SOPORTE PARA IVA EN FACTURAS Y EDICIÓN/ELIMINACIÓN DE PAGOS
  */
 
 // Estado global
@@ -17,31 +17,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     updateUserAvatarPagos();
 
-    // Cargar tasa BCV
     await actualizarDisplayTasa('#tasa-bcv');
-
-    // Cargar ventas para selector
     await cargarVentasSelect();
-
-    // Setup event listeners
     setupEventListenersPagos();
 
-    // Verificar si hay venta en URL params
+    // Eventos del modal de edición de pago
+    document.getElementById('btn-cerrar-editar-pago').addEventListener('click', cerrarModalEditarPago);
+    document.getElementById('btn-cancelar-editar-pago').addEventListener('click', cerrarModalEditarPago);
+    document.getElementById('btn-guardar-editar-pago').addEventListener('click', guardarEdicionPago);
+    document.getElementById('modal-editar-pago').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) cerrarModalEditarPago();
+    });
+
     const urlParams = new URLSearchParams(window.location.search);
     const filtroGlobal = urlParams.get('filtro');
     const ventaId = urlParams.get('venta');
 
     if (filtroGlobal && !ventaId) {
-        // Modo: mostrar todos los pagos con filtro
         document.getElementById('select-venta').disabled = true;
         document.getElementById('buscar-a2').disabled = true;
         document.getElementById('buscar-cliente-pago').disabled = true;
         document.getElementById('btn-buscar-venta').disabled = true;
-
         document.getElementById('form-pago-card').style.display = 'none';
         document.getElementById('info-venta-card').style.display = 'none';
         document.getElementById('historial-pagos-card').style.display = '';
-
         await cargarPagosGlobales(filtroGlobal);
         return;
     }
@@ -51,7 +50,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await seleccionarVenta(ventaId);
     }
 
-    // Evento del filtro de validación
     document.getElementById('filtro-validacion').addEventListener('change', () => renderizarPagos());
 });
 
@@ -69,7 +67,6 @@ function updateUserAvatarPagos() {
 }
 
 function setupEventListenersPagos() {
-    // Selector de venta
     document.getElementById('select-venta').addEventListener('change', async (e) => {
         if (e.target.value) {
             await seleccionarVenta(e.target.value);
@@ -78,33 +75,27 @@ function setupEventListenersPagos() {
         }
     });
 
-    // Buscar por A2
     document.getElementById('buscar-a2').addEventListener('keydown', async (e) => {
         if (e.key === 'Enter') await buscarPorA2();
     });
     document.getElementById('btn-buscar-venta').addEventListener('click', buscarPorA2);
 
-    // Buscar por cliente
     document.getElementById('buscar-cliente-pago').addEventListener('keydown', async (e) => {
         if (e.key === 'Enter') await buscarPorCliente();
     });
 
-    // Calcular equivalencia Bs. al cambiar monto o tasa
     document.getElementById('p-monto').addEventListener('input', actualizarEquivalenciaBsPago);
     document.getElementById('p-tasa').addEventListener('input', actualizarEquivalenciaBsPago);
 
-    // Botones
     document.getElementById('btn-guardar-pago').addEventListener('click', guardarPago);
     document.getElementById('btn-limpiar-pago').addEventListener('click', limpiarFormularioPago);
 
-    // Refresh tasa
     document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
         invalidateTasaCache();
         showAlert('Actualizando tasa BCV...', 'info');
         await actualizarDisplayTasa('#tasa-bcv');
     });
 
-    // Set fecha de hoy
     document.getElementById('p-fecha').value = getTodayISO();
 }
 
@@ -150,7 +141,7 @@ async function cargarVentasSelect() {
 }
 
 // ============================================
-// SELECCIONAR VENTA (con soporte para IVA)
+// SELECCIONAR VENTA
 // ============================================
 
 async function seleccionarVenta(ventaId) {
@@ -160,22 +151,17 @@ async function seleccionarVenta(ventaId) {
             venta = await getVentaById(ventaId);
         }
         ventaSeleccionada = venta;
-
-        // Cargar pagos de esta venta
         pagosCache = await getPagosByVenta(ventaId);
 
-        // Determinar el monto total a pagar (base o con IVA si está facturada)
         const tieneFactura = venta.numero_factura && venta.numero_factura.trim() !== '';
         const montoTotalAPagar = tieneFactura ? (venta.total_con_iva || venta.monto_total_usd) : venta.monto_total_usd;
         const montoBase = venta.monto_total_usd;
         const montoIVA = venta.monto_iva || 0;
 
-        // Calcular totales con el monto correcto
         const totalPagado = pagosCache.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
         const saldo = montoTotalAPagar - totalPagado;
         const porcentaje = montoTotalAPagar > 0 ? Math.min(100, (totalPagado / montoTotalAPagar) * 100) : 0;
 
-        // Actualizar UI info
         document.getElementById('info-a2').textContent = venta.correlacion_a2;
         document.getElementById('info-cliente').textContent = venta.cliente ? venta.cliente.razon_social : 'N/A';
         document.getElementById('info-monto').textContent = formatUSD(montoTotalAPagar);
@@ -184,7 +170,6 @@ async function seleccionarVenta(ventaId) {
         document.getElementById('info-porcentaje').textContent = porcentaje.toFixed(0) + '%';
         document.getElementById('barra-progreso').style.width = porcentaje + '%';
 
-        // Cambiar la etiqueta del monto total
         const labelMonto = document.getElementById('info-monto-label');
         if (tieneFactura) {
             labelMonto.textContent = 'Total Factura (USD)';
@@ -192,7 +177,6 @@ async function seleccionarVenta(ventaId) {
             labelMonto.textContent = 'Monto Total (USD)';
         }
 
-        // Mostrar/ocultar campos de IVA
         const containerBase = document.getElementById('info-monto-base-container');
         const containerIVA = document.getElementById('info-iva-container');
         const containerTotalFactura = document.getElementById('info-total-factura-container');
@@ -200,10 +184,8 @@ async function seleccionarVenta(ventaId) {
         if (tieneFactura) {
             containerBase.style.display = '';
             document.getElementById('info-monto-base').textContent = formatUSD(montoBase);
-            
             containerIVA.style.display = '';
             document.getElementById('info-iva').textContent = formatUSD(montoIVA);
-            
             containerTotalFactura.style.display = '';
             document.getElementById('info-total-factura').textContent = formatUSD(montoTotalAPagar);
         } else {
@@ -212,7 +194,6 @@ async function seleccionarVenta(ventaId) {
             containerTotalFactura.style.display = 'none';
         }
 
-        // Badge de estado
         const badgeEl = document.getElementById('venta-estado-badge');
         const badgeClasses = {
             'pendiente': 'badge-pendiente',
@@ -224,11 +205,9 @@ async function seleccionarVenta(ventaId) {
         const estadoLabels = { 'pendiente': 'Pendiente', 'parcial': 'Parcial', 'pagada': 'Pagada', 'anulada': 'Anulada' };
         badgeEl.textContent = estadoLabels[venta.estado] || venta.estado;
 
-        // Mostrar cards
         document.getElementById('info-venta-card').style.display = '';
         document.getElementById('historial-pagos-card').style.display = '';
 
-        // Mostrar formulario solo si no está pagada completamente
         if (venta.estado === 'pagada' || saldo <= 0.01) {
             document.getElementById('form-pago-card').style.display = 'none';
         } else {
@@ -286,7 +265,6 @@ async function buscarPorA2() {
             .limit(10);
 
         if (error) throw error;
-
         if (!data || data.length === 0) {
             showAlert('No se encontro ninguna nota con ese correlativo', 'warning');
             return;
@@ -327,7 +305,6 @@ async function buscarPorCliente() {
             .limit(10);
 
         if (cError) throw cError;
-
         if (!clientes || clientes.length === 0) {
             showAlert('No se encontro ningun cliente con ese criterio', 'warning');
             return;
@@ -354,7 +331,6 @@ async function buscarPorCliente() {
             .limit(20);
 
         if (vError) throw vError;
-
         if (!ventas || ventas.length === 0) {
             showAlert('No se encontraron notas para ese cliente', 'warning');
             return;
@@ -392,7 +368,7 @@ function actualizarEquivalenciaBsPago() {
 }
 
 // ============================================
-// GUARDAR PAGO (con IVA)
+// GUARDAR PAGO
 // ============================================
 
 async function guardarPago() {
@@ -421,10 +397,8 @@ async function guardarPago() {
             return;
         }
 
-        // Determinar el monto total a pagar (con IVA si está facturada)
         const tieneFactura = ventaSeleccionada.numero_factura && ventaSeleccionada.numero_factura.trim() !== '';
         const montoTotalAPagar = tieneFactura ? (ventaSeleccionada.total_con_iva || ventaSeleccionada.monto_total_usd) : ventaSeleccionada.monto_total_usd;
-
         const totalPagado = pagosCache.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
         const saldo = montoTotalAPagar - totalPagado;
 
@@ -481,7 +455,7 @@ function limpiarFormularioPago() {
 }
 
 // ============================================
-// RENDERIZAR PAGOS
+// RENDERIZAR PAGOS CON BOTONES EDITAR/ELIMINAR
 // ============================================
 
 function renderizarPagos() {
@@ -544,6 +518,16 @@ function renderizarPagos() {
             ? '<span class="badge badge-pagada">✅ Validado</span>' 
             : '<span class="badge badge-pendiente">⏳ Pendiente</span>';
 
+        let accionesHtml = '';
+        if (isAdminUser) {
+            accionesHtml = `
+                <div style="display: flex; gap: 4px; justify-content: center; margin-top: 4px;">
+                    <button class="btn btn-sm btn-ghost" onclick="editarPago('${p.id}')" title="Editar pago" style="color: var(--info);">✏️</button>
+                    <button class="btn btn-sm btn-ghost" onclick="eliminarPagoConfirm('${p.id}')" title="Eliminar pago" style="color: var(--danger);">🗑️</button>
+                </div>
+            `;
+        }
+
         const btnValidar = isAdminUser 
             ? `<button class="btn btn-sm ${validado ? 'btn-warning' : 'btn-success'}" onclick="toggleValidacionPago('${p.id}', ${validado})" title="${validado ? 'Desmarcar como validado' : 'Marcar como validado'}">
                 ${validado ? '↩️' : '✅'}
@@ -563,7 +547,10 @@ function renderizarPagos() {
                     ${badgeValidado}
                     <div style="margin-top: 4px;">${btnValidar}</div>
                 </td>
-                <td>${p.vendedor ? p.vendedor.full_name : 'N/A'}</td>
+                <td>
+                    ${p.vendedor ? p.vendedor.full_name : 'N/A'}
+                    ${accionesHtml}
+                </td>
             </tr>
         `;
     }).join('');
@@ -582,7 +569,106 @@ function actualizarResumen() {
 }
 
 // ============================================
-// TOGGLE VALIDACIÓN DE PAGO
+// EDITAR PAGO
+// ============================================
+
+window.editarPago = async function(pagoId) {
+    if (!isAdmin()) {
+        showAlert('Solo los administradores pueden editar pagos.', 'error');
+        return;
+    }
+
+    try {
+        const pago = pagosCache.find(p => p.id === pagoId);
+        if (!pago) {
+            showAlert('Pago no encontrado.', 'error');
+            return;
+        }
+
+        document.getElementById('ep-id').value = pago.id;
+        document.getElementById('ep-fecha').value = pago.fecha_pago;
+        document.getElementById('ep-monto').value = pago.monto_pagado_usd;
+        document.getElementById('ep-metodo').value = pago.metodo_pago || '';
+        document.getElementById('ep-referencia').value = pago.referencia || '';
+        document.getElementById('ep-banco').value = pago.banco_origen || '';
+        document.getElementById('ep-tasa').value = pago.tasa_usada;
+        document.getElementById('ep-validado').checked = pago.validado === true;
+
+        document.getElementById('modal-editar-pago').style.display = 'flex';
+    } catch (error) {
+        console.error('Error al cargar pago para editar:', error);
+        showAlert('Error al cargar el pago.', 'error');
+    }
+};
+
+function cerrarModalEditarPago() {
+    document.getElementById('modal-editar-pago').style.display = 'none';
+}
+
+async function guardarEdicionPago() {
+    const pagoId = document.getElementById('ep-id').value;
+    const fecha_pago = document.getElementById('ep-fecha').value;
+    const monto_pagado_usd = parseFloat(document.getElementById('ep-monto').value);
+    const metodo_pago = document.getElementById('ep-metodo').value;
+    const referencia = document.getElementById('ep-referencia').value.trim() || null;
+    const banco_origen = document.getElementById('ep-banco').value.trim() || null;
+    const tasa_usada = parseFloat(document.getElementById('ep-tasa').value);
+    const validado = document.getElementById('ep-validado').checked;
+
+    if (!fecha_pago || !monto_pagado_usd || !metodo_pago || !tasa_usada) {
+        showAlert('Todos los campos obligatorios deben estar llenos.', 'error');
+        return;
+    }
+
+    try {
+        showLoading('#btn-guardar-editar-pago', 'Actualizando...');
+
+        const data = { fecha_pago, monto_pagado_usd, metodo_pago, referencia, banco_origen, tasa_usada, validado };
+        await actualizarPago(pagoId, data);
+
+        hideLoading('#btn-guardar-editar-pago');
+        showAlert('Pago actualizado correctamente.', 'success');
+        cerrarModalEditarPago();
+        await seleccionarVenta(ventaSeleccionada.id);
+    } catch (error) {
+        hideLoading('#btn-guardar-editar-pago');
+        console.error('Error actualizando pago:', error);
+        showAlert('Error al actualizar: ' + error.message, 'error');
+    }
+}
+
+// ============================================
+// ELIMINAR PAGO
+// ============================================
+
+window.eliminarPagoConfirm = async function(pagoId) {
+    if (!isAdmin()) {
+        showAlert('Solo los administradores pueden eliminar pagos.', 'error');
+        return;
+    }
+
+    const confirmado = await confirmAction('⚠️ ¿Está seguro de eliminar este pago? Esta acción no se puede deshacer.');
+    if (!confirmado) return;
+
+    try {
+        await eliminarPago(pagoId);
+        showAlert('Pago eliminado correctamente.', 'success');
+        if (ventaSeleccionada) {
+            await seleccionarVenta(ventaSeleccionada.id);
+        } else {
+            const filtro = new URLSearchParams(window.location.search).get('filtro');
+            if (filtro) {
+                await cargarPagosGlobales(filtro);
+            }
+        }
+    } catch (error) {
+        console.error('Error eliminando pago:', error);
+        showAlert('Error al eliminar: ' + error.message, 'error');
+    }
+};
+
+// ============================================
+// TOGGLE VALIDACIÓN
 // ============================================
 
 window.toggleValidacionPago = async function(pagoId, estadoActual) {
@@ -607,7 +693,7 @@ window.toggleValidacionPago = async function(pagoId, estadoActual) {
 };
 
 // ============================================
-// PAGOS GLOBALES (desde Dashboard)
+// PAGOS GLOBALES
 // ============================================
 
 async function cargarPagosGlobales(filtro) {
@@ -636,7 +722,6 @@ async function cargarPagosGlobales(filtro) {
         document.getElementById('total-pendientes-validacion').textContent = pendientes;
 
         renderizarPagosGlobales();
-
     } catch (error) {
         console.error('Error cargando pagos globales:', error);
         showAlert('Error al cargar los pagos: ' + error.message, 'error');
@@ -683,8 +768,18 @@ function renderizarPagosGlobales() {
             ? '<span class="badge badge-pagada">✅ Validado</span>' 
             : '<span class="badge badge-pendiente">⏳ Pendiente</span>';
 
+        let accionesHtml = '';
+        if (isAdminUser) {
+            accionesHtml = `
+                <div style="display: flex; gap: 4px; justify-content: center; margin-top: 4px;">
+                    <button class="btn btn-sm btn-ghost" onclick="editarPago('${p.id}')" title="Editar pago" style="color: var(--info);">✏️</button>
+                    <button class="btn btn-sm btn-ghost" onclick="eliminarPagoConfirm('${p.id}')" title="Eliminar pago" style="color: var(--danger);">🗑️</button>
+                </div>
+            `;
+        }
+
         const btnValidar = isAdminUser 
-            ? `<button class="btn btn-sm ${validado ? 'btn-warning' : 'btn-success'}" onclick="toggleValidacionPagoGlobal('${p.id}', ${validado})" title="${validado ? 'Desmarcar como validado' : 'Marcar como validado'}">
+            ? `<button class="btn btn-sm ${validado ? 'btn-warning' : 'btn-success'}" onclick="toggleValidacionPago('${p.id}', ${validado})" title="${validado ? 'Desmarcar como validado' : 'Marcar como validado'}">
                 ${validado ? '↩️' : '✅'}
                </button>`
             : '';
@@ -704,35 +799,14 @@ function renderizarPagosGlobales() {
                     ${badgeValidado}
                     <div style="margin-top: 4px;">${btnValidar}</div>
                 </td>
-                <td>${p.vendedor ? p.vendedor.full_name : 'N/A'}</td>
+                <td>
+                    ${p.vendedor ? p.vendedor.full_name : 'N/A'}
+                    ${accionesHtml}
+                </td>
             </tr>
         `;
     }).join('');
 }
-
-window.toggleValidacionPagoGlobal = async function(pagoId, estadoActual) {
-    if (!isAdmin()) {
-        showAlert('Solo los administradores pueden validar pagos.', 'error');
-        return;
-    }
-
-    const nuevoEstado = !estadoActual;
-    const mensaje = nuevoEstado ? 'marcar como validado' : 'desmarcar como validado';
-    const confirmado = await confirmAction(`¿Está seguro de ${mensaje} este pago?`);
-    if (!confirmado) return;
-
-    try {
-        await actualizarValidacionPago(pagoId, nuevoEstado);
-        showAlert(`Pago ${nuevoEstado ? 'validado' : 'desmarcado'} correctamente.`, 'success');
-        const filtro = new URLSearchParams(window.location.search).get('filtro');
-        if (filtro) {
-            await cargarPagosGlobales(filtro);
-        }
-    } catch (error) {
-        console.error('Error actualizando validación:', error);
-        showAlert('Error al actualizar la validación: ' + error.message, 'error');
-    }
-};
 
 // ============================================
 // EXPORTAR FUNCIONES GLOBALES
@@ -741,4 +815,5 @@ window.seleccionarVenta = seleccionarVenta;
 window.buscarPorA2 = buscarPorA2;
 window.buscarPorCliente = buscarPorCliente;
 window.toggleValidacionPago = toggleValidacionPago;
-window.toggleValidacionPagoGlobal = toggleValidacionPagoGlobal;
+window.editarPago = editarPago;
+window.eliminarPagoConfirm = eliminarPagoConfirm;

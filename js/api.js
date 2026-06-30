@@ -733,11 +733,14 @@ async function getVentasRecientes(limit = 10) {
         .from('ventas')
         .select(`
             *,
-            cliente:clientes(razon_social)
+            cliente:clientes(razon_social),
+            pagos:pagos(validado)
         `)
         .order('created_at', { ascending: false })
         .limit(limit);
+
     if (sede) query = query.eq('sede', sede);
+
     const { data, error } = await query;
     if (error) throw error;
     return data || [];

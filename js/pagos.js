@@ -1,8 +1,7 @@
 /**
  * Sistema Diamelab - Modulo de Pagos
  * Registro de pagos con comprobantes, retenciones y métodos de Venezuela
- * Incluye funcionalidad de validación de pagos, filtros y resumen
- * AHORA CON SOPORTE PARA IVA EN FACTURAS Y EDICIÓN/ELIMINACIÓN DE PAGOS
+ * Incluye funcionalidad de validación de pagos, filtros, resumen, edición/eliminación y conversión Bs->USD
  */
 
 // Estado global
@@ -84,8 +83,10 @@ function setupEventListenersPagos() {
         if (e.key === 'Enter') await buscarPorCliente();
     });
 
-    document.getElementById('p-monto').addEventListener('input', actualizarEquivalenciaBsPago);
-    document.getElementById('p-tasa').addEventListener('input', actualizarEquivalenciaBsPago);
+    // Eventos para conversión de moneda y tasa
+    document.getElementById('p-monto-bs').addEventListener('input', calcularEquivalenteUSD);
+    document.getElementById('p-tasa').addEventListener('input', calcularEquivalenteUSD);
+    document.getElementById('p-fecha').addEventListener('change', manejarCambioFecha);
 
     document.getElementById('btn-guardar-pago').addEventListener('click', guardarPago);
     document.getElementById('btn-limpiar-pago').addEventListener('click', limpiarFormularioPago);
@@ -94,6 +95,9 @@ function setupEventListenersPagos() {
         invalidateTasaCache();
         showAlert('Actualizando tasa BCV...', 'info');
         await actualizarDisplayTasa('#tasa-bcv');
+        if (document.getElementById('form-pago-card').style.display !== 'none') {
+            await cargarTasaActual();
+        }
     });
 
     document.getElementById('p-fecha').value = getTodayISO();
@@ -212,10 +216,12 @@ async function seleccionarVenta(ventaId) {
             document.getElementById('form-pago-card').style.display = 'none';
         } else {
             document.getElementById('form-pago-card').style.display = '';
+            // Cargar tasa actual y manejar fecha
             const tasaEl = document.getElementById('p-tasa');
-            if (!tasaEl.value) {
-                tasaEl.value = venta.tasa_bcv_aplicada;
+            if (!tasaEl.value || parseFloat(tasaEl.value) === 0) {
+                await cargarTasaActual();
             }
+            manejarCambioFecha();
         }
 
         renderizarPagos();
@@ -353,17 +359,61 @@ async function buscarPorCliente() {
 }
 
 // ============================================
-// CALCULAR EQUIVALENCIA BS
+// CONVERSIÓN DE MONTO Y TASA DINÁMICA
 // ============================================
 
-function actualizarEquivalenciaBsPago() {
-    const monto = parseFloat(document.getElementById('p-monto').value) || 0;
+function calcularEquivalenteUSD() {
+    const montoBs = parseFloat(document.getElementById('p-monto-bs').value) || 0;
     const tasa = parseFloat(document.getElementById('p-tasa').value) || 0;
-    const el = document.getElementById('p-monto-bs');
-    if (monto > 0 && tasa > 0) {
-        el.value = formatVES(monto, tasa);
+    const equivalenteDiv = document.getElementById('p-equivalente-usd');
+
+    if (montoBs > 0 && tasa > 0) {
+        const usd = montoBs / tasa;
+        equivalenteDiv.textContent = formatUSD(usd);
     } else {
-        el.value = '';
+        equivalenteDiv.textContent = '$0.00';
+    }
+}
+
+function manejarCambioFecha() {
+    const fechaPago = document.getElementById('p-fecha').value;
+    const tasaInput = document.getElementById('p-tasa');
+    const tasaInfo = document.getElementById('p-tasa-info');
+
+    if (!fechaPago) {
+        tasaInput.disabled = false;
+        tasaInfo.textContent = 'Seleccione una fecha para usar la tasa correspondiente.';
+        return;
+    }
+
+    const hoy = new Date().toISOString().split('T')[0];
+    if (fechaPago === hoy) {
+        tasaInput.disabled = true;
+        tasaInfo.textContent = 'Tasa del día (no editable). Cambie la fecha para usar otra tasa.';
+        cargarTasaActual();
+    } else {
+        tasaInput.disabled = false;
+        tasaInfo.textContent = 'Tasa editable para pagos retroactivos.';
+        if (!tasaInput.value || parseFloat(tasaInput.value) === 0) {
+            const ultimaTasa = localStorage.getItem('diamelab_ultima_tasa_valida');
+            if (ultimaTasa) {
+                tasaInput.value = parseFloat(ultimaTasa);
+                calcularEquivalenteUSD();
+            }
+        }
+    }
+}
+
+async function cargarTasaActual() {
+    try {
+        const { tasa } = await obtenerTasaBCV();
+        const tasaInput = document.getElementById('p-tasa');
+        if (tasaInput) {
+            tasaInput.value = tasa;
+            calcularEquivalenteUSD();
+        }
+    } catch (error) {
+        console.warn('Error cargando tasa actual:', error);
     }
 }
 
@@ -379,16 +429,19 @@ async function guardarPago() {
         }
 
         const fechaPago = document.getElementById('p-fecha').value;
-        const montoPagado = parseFloat(document.getElementById('p-monto').value);
+        const montoBs = parseFloat(document.getElementById('p-monto-bs').value);
         const metodoPago = document.getElementById('p-metodo').value;
         const tasaUsada = parseFloat(document.getElementById('p-tasa').value);
         const referencia = document.getElementById('p-referencia').value.trim() || null;
         const banco = document.getElementById('p-banco').value.trim() || null;
         const validado = document.getElementById('p-validado').checked;
 
+        // Convertir monto en Bs a USD
+        const montoPagado = montoBs / tasaUsada;
+
         let errores = [];
         if (!fechaPago) errores.push('La fecha de pago es obligatoria');
-        if (!montoPagado || montoPagado <= 0) errores.push('El monto pagado debe ser mayor a cero');
+        if (!montoBs || montoBs <= 0) errores.push('El monto en bolívares debe ser mayor a cero');
         if (!metodoPago) errores.push('Seleccione un metodo de pago');
         if (!tasaUsada || tasaUsada <= 0) errores.push('La tasa BCV es obligatoria');
 
@@ -443,15 +496,16 @@ async function guardarPago() {
 }
 
 function limpiarFormularioPago() {
-    document.getElementById('p-monto').value = '';
+    document.getElementById('p-monto-bs').value = '';
     document.getElementById('p-metodo').value = '';
     document.getElementById('p-referencia').value = '';
     document.getElementById('p-banco').value = '';
     document.getElementById('p-comprobante').value = '';
     document.getElementById('p-ret-iva').value = '';
     document.getElementById('p-ret-islr').value = '';
-    document.getElementById('p-monto-bs').value = '';
+    document.getElementById('p-equivalente-usd').textContent = '$0.00';
     document.getElementById('p-validado').checked = false;
+    // Mantener fecha y tasa
 }
 
 // ============================================

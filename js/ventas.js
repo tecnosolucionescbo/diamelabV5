@@ -369,10 +369,32 @@ function generarFilaVenta(v) {
     const vencimientoClass = diasRestantes < 0 ? 'text-danger' : diasRestantes <= 3 ? 'text-warning' : '';
     const vencText = diasRestantes < 0 ? 'Vencido' : `${diasRestantes}d`;
 
+    // === FACTURACIÓN ===
     const tieneFactura = v.numero_factura && v.numero_factura.trim() !== '';
     const facturaBadge = tieneFactura
         ? `<span class="badge badge-pagada" style="font-size:0.7rem;">✅ Facturada</span>`
         : `<span class="badge badge-pendiente" style="font-size:0.7rem;">⏳ Pendiente</span>`;
+    const facturaNumero = tieneFactura ? v.numero_factura : '-';
+
+    // === MONTO CON IVA ===
+    const montoBase = parseFloat(v.monto_total_usd) || 0;
+    const montoIVA = parseFloat(v.monto_iva) || 0;
+    const totalConIVA = parseFloat(v.total_con_iva) || montoBase;
+
+    // Si tiene factura, mostramos el total con IVA como principal, y el IVA aparte
+    const montoMostrar = tieneFactura ? totalConIVA : montoBase;
+    const ivaMostrar = tieneFactura ? montoIVA : 0;
+
+    // Formatear para mostrar en la columna Monto: si tiene factura, poner el total con IVA en negrita y el base pequeño
+    let montoHtml = `<strong>${formatUSD(montoMostrar)}</strong>`;
+    if (tieneFactura) {
+        montoHtml += `<br><small style="color: var(--gray-500);">Base: ${formatUSD(montoBase)}</small>`;
+    }
+
+    // Columna IVA: mostrar solo si tiene factura
+    const ivaHtml = tieneFactura
+        ? `<span style="color: var(--warning); font-weight: 600;">${formatUSD(montoIVA)}</span>`
+        : `<span style="color: var(--gray-400);">-</span>`;
 
     return `
         <tr>
@@ -381,7 +403,8 @@ function generarFilaVenta(v) {
             <td>${v.sede || 'N/A'}</td>
             <td>${formatDate(v.fecha_emision)}</td>
             <td class="${vencimientoClass}">${formatDate(v.fecha_vencimiento)} <small>(${vencText})</small></td>
-            <td><strong>${formatUSD(v.monto_total_usd)}</strong></td>
+            <td>${montoHtml}</td>
+            <td style="text-align: center;">${ivaHtml}</td>
             <td><span class="badge ${badgeClass}">${estadoText}</span></td>
             <td>
                 ${facturaBadge}

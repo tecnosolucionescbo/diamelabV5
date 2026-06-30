@@ -1,7 +1,7 @@
 /**
  * Sistema Diamelab - Modulo de Pagos
  * Registro de pagos con comprobantes, retenciones y métodos de Venezuela
- * Incluye funcionalidad de validación de pagos
+ * Incluye funcionalidad de validación de pagos, filtros y resumen
  */
 
 // Estado global
@@ -32,6 +32,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('select-venta').value = ventaId;
         await seleccionarVenta(ventaId);
     }
+
+    // Evento del filtro de validación
+    document.getElementById('filtro-validacion').addEventListener('change', () => renderizarPagos());
 });
 
 // ============================================
@@ -186,7 +189,7 @@ async function seleccionarVenta(ventaId) {
             }
         }
 
-        // Renderizar pagos
+        // Renderizar pagos (con resumen y filtro)
         renderizarPagos();
 
     } catch (error) {
@@ -390,7 +393,7 @@ async function guardarPago() {
             metodo_pago: metodoPago,
             referencia: referencia,
             banco_origen: banco,
-            validado: validado // <-- NUEVO CAMPO
+            validado: validado
         };
 
         // Archivos
@@ -423,12 +426,11 @@ function limpiarFormularioPago() {
     document.getElementById('p-ret-iva').value = '';
     document.getElementById('p-ret-islr').value = '';
     document.getElementById('p-monto-bs').value = '';
-    document.getElementById('p-validado').checked = false; // Limpiar checkbox
-    // Mantener fecha y tasa
+    document.getElementById('p-validado').checked = false;
 }
 
 // ============================================
-// RENDERIZAR PAGOS (con columna Validado)
+// RENDERIZAR PAGOS CON FILTRO Y RESUMEN
 // ============================================
 
 function renderizarPagos() {
@@ -444,12 +446,33 @@ function renderizarPagos() {
                 </div>
             </td></tr>
         `;
+        actualizarResumen();
+        return;
+    }
+
+    // Obtener filtro
+    const filtro = document.getElementById('filtro-validacion').value;
+    let pagosFiltrados = pagosCache;
+
+    if (filtro === 'validados') {
+        pagosFiltrados = pagosCache.filter(p => p.validado === true);
+    } else if (filtro === 'pendientes') {
+        pagosFiltrados = pagosCache.filter(p => p.validado !== true);
+    }
+
+    if (pagosFiltrados.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--gray-400);">
+                No hay pagos ${filtro === 'validados' ? 'validados' : filtro === 'pendientes' ? 'pendientes' : ''} para mostrar.
+            </td></tr>
+        `;
+        actualizarResumen();
         return;
     }
 
     const isAdminUser = isAdmin();
 
-    tbody.innerHTML = pagosCache.map(p => {
+    tbody.innerHTML = pagosFiltrados.map(p => {
         const metodoLabels = {
             'Transferencia': 'Transferencia',
             'Pago Movil': 'Pago Movil',
@@ -466,13 +489,11 @@ function renderizarPagos() {
         if (p.retencion_islr_url) comps.push(`<a href="${p.retencion_islr_url}" target="_blank" style="color: var(--diamelab-primary); font-weight: 500;">ISLR</a>`);
         if (comps.length > 0) comprobantesHtml = comps.join(' | ');
 
-        // Estado de validación
         const validado = p.validado === true;
         const badgeValidado = validado 
             ? '<span class="badge badge-pagada">✅ Validado</span>' 
             : '<span class="badge badge-pendiente">⏳ Pendiente</span>';
 
-        // Botón para cambiar validación (solo admin)
         const btnValidar = isAdminUser 
             ? `<button class="btn btn-sm ${validado ? 'btn-warning' : 'btn-success'}" onclick="toggleValidacionPago('${p.id}', ${validado})" title="${validado ? 'Desmarcar como validado' : 'Marcar como validado'}">
                 ${validado ? '↩️' : '✅'}
@@ -496,10 +517,26 @@ function renderizarPagos() {
             </tr>
         `;
     }).join('');
+
+    actualizarResumen();
 }
 
 // ============================================
-// TOGGLE VALIDACIÓN DE PAGO (NUEVA FUNCIÓN)
+// ACTUALIZAR RESUMEN DE VALIDACIÓN
+// ============================================
+
+function actualizarResumen() {
+    const total = pagosCache.length;
+    const validados = pagosCache.filter(p => p.validado === true).length;
+    const pendientes = total - validados;
+
+    document.getElementById('total-pagos').textContent = total;
+    document.getElementById('total-validados').textContent = validados;
+    document.getElementById('total-pendientes-validacion').textContent = pendientes;
+}
+
+// ============================================
+// TOGGLE VALIDACIÓN DE PAGO
 // ============================================
 
 window.toggleValidacionPago = async function(pagoId, estadoActual) {

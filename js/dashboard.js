@@ -258,6 +258,123 @@ async function cargarVentasRecientes() {
     }
 }
 
+// ============================================
+// BOTÓN FLOTANTE - ESTADO DE CUENTA RÁPIDO
+// ============================================
+
+document.addEventListener('DOMContentLoaded', async function() {
+    // ... (el resto de la inicialización ya existe) ...
+
+    // Referencias a elementos del modal FAB
+    const fabBtn = document.getElementById('fab-estado-cuenta');
+    const modal = document.getElementById('modal-fab-cliente');
+    const btnCerrar = document.getElementById('btn-cerrar-fab-cliente');
+    const btnCancelar = document.getElementById('btn-cancelar-fab-cliente');
+    const btnIr = document.getElementById('btn-ir-fab-cliente');
+    const inputBusqueda = document.getElementById('fab-buscar-cliente');
+    const resultados = document.getElementById('fab-resultados');
+
+    let clientesFab = [];
+    let clienteSeleccionadoFab = null;
+
+    // Cargar clientes al abrir el modal
+    async function cargarClientesFab() {
+        try {
+            clientesFab = await getClientes();
+        } catch (error) {
+            console.error('Error cargando clientes para FAB:', error);
+            showAlert('Error al cargar clientes', 'error');
+        }
+    }
+
+    // Mostrar resultados de búsqueda
+    function mostrarResultadosFab(query) {
+        const q = query.trim().toLowerCase();
+        const filtrados = clientesFab.filter(c =>
+            c.razon_social.toLowerCase().includes(q) ||
+            c.rif.toLowerCase().includes(q)
+        ).slice(0, 15);
+
+        if (filtrados.length === 0) {
+            resultados.innerHTML = '<div class="item" style="color:var(--gray-400);">No se encontraron clientes</div>';
+        } else {
+            resultados.innerHTML = filtrados.map(c => `
+                <div class="item" data-id="${c.id}" data-nombre="${c.razon_social}" data-rif="${c.rif}">
+                    <strong>${c.razon_social}</strong>
+                    <div class="rif">${c.rif}</div>
+                </div>
+            `).join('');
+            resultados.querySelectorAll('.item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const id = el.dataset.id;
+                    const nombre = el.dataset.nombre;
+                    const rif = el.dataset.rif;
+                    clienteSeleccionadoFab = { id, nombre, rif };
+                    inputBusqueda.value = nombre + ' (' + rif + ')';
+                    btnIr.disabled = false;
+                    resultados.style.display = 'none';
+                });
+            });
+        }
+        resultados.style.display = 'block';
+    }
+
+    // Eventos del modal FAB
+    fabBtn.addEventListener('click', async () => {
+        await cargarClientesFab();
+        clienteSeleccionadoFab = null;
+        inputBusqueda.value = '';
+        resultados.innerHTML = '';
+        resultados.style.display = 'none';
+        btnIr.disabled = true;
+        modal.style.display = 'flex';
+        setTimeout(() => inputBusqueda.focus(), 100);
+    });
+
+    btnCerrar.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    btnCancelar.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    modal.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) modal.style.display = 'none';
+    });
+
+    inputBusqueda.addEventListener('input', (e) => {
+        const query = e.target.value;
+        if (query.length >= 2) {
+            mostrarResultadosFab(query);
+        } else {
+            resultados.style.display = 'none';
+            btnIr.disabled = true;
+        }
+    });
+
+    inputBusqueda.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const primerResultado = resultados.querySelector('.item');
+            if (primerResultado) primerResultado.click();
+        }
+    });
+
+    // Botón "Ir a Estado de Cuenta"
+    btnIr.addEventListener('click', () => {
+        if (clienteSeleccionadoFab) {
+            window.location.href = `estado-cuenta.html?cliente=${clienteSeleccionadoFab.id}`;
+        } else {
+            showAlert('Seleccione un cliente primero.', 'warning');
+        }
+    });
+
+    // Cerrar resultados al hacer click fuera
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#modal-fab-cliente')) {
+            resultados.style.display = 'none';
+        }
+    });
+});
+
 window.updateUserAvatar = updateUserAvatar;
 window.cargarEstadisticas = cargarEstadisticas;
 window.cargarVentasRecientes = cargarVentasRecientes;

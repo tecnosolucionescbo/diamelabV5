@@ -22,12 +22,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListenersPagos();
 
     // Eventos del modal de edición
-    document.getElementById('btn-cerrar-editar-pago').addEventListener('click', cerrarModalEditarPago);
-    document.getElementById('btn-cancelar-editar-pago').addEventListener('click', cerrarModalEditarPago);
-    document.getElementById('btn-guardar-editar-pago').addEventListener('click', guardarEdicionPago);
-    document.getElementById('modal-editar-pago').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) cerrarModalEditarPago();
-    });
+    const btnCerrarEditar = document.getElementById('btn-cerrar-editar-pago');
+    if (btnCerrarEditar) btnCerrarEditar.addEventListener('click', cerrarModalEditarPago);
+
+    const btnCancelarEditar = document.getElementById('btn-cancelar-editar-pago');
+    if (btnCancelarEditar) btnCancelarEditar.addEventListener('click', cerrarModalEditarPago);
+
+    const btnGuardarEditar = document.getElementById('btn-guardar-editar-pago');
+    if (btnGuardarEditar) btnGuardarEditar.addEventListener('click', guardarEdicionPago);
+
+    const modalEditar = document.getElementById('modal-editar-pago');
+    if (modalEditar) {
+        modalEditar.addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) cerrarModalEditarPago();
+        });
+    }
 
     // Eventos para cálculo de equivalente en el formulario principal
     const pMonto = document.getElementById('p-monto-bs');
@@ -97,8 +106,110 @@ document.addEventListener('DOMContentLoaded', async () => {
         await seleccionarVenta(ventaId);
     }
 
-    document.getElementById('filtro-validacion').addEventListener('change', () => renderizarPagos());
+    const filtroValidacion = document.getElementById('filtro-validacion');
+    if (filtroValidacion) {
+        filtroValidacion.addEventListener('change', () => renderizarPagos());
+    }
 });
+
+// ============================================
+// FUNCIÓN DE CONFIGURACIÓN DE EVENTOS (CORREGIDA)
+// ============================================
+function setupEventListenersPagos() {
+    // Select de ventas
+    const selectVenta = document.getElementById('select-venta');
+    if (selectVenta) {
+        selectVenta.addEventListener('change', async (e) => {
+            if (e.target.value) {
+                await seleccionarVenta(e.target.value);
+            } else {
+                ocultarDetalleVenta();
+            }
+        });
+    }
+
+    // Búsqueda por A2
+    const buscarA2 = document.getElementById('buscar-a2');
+    if (buscarA2) {
+        buscarA2.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') await buscarPorA2();
+        });
+    }
+
+    const btnBuscarVenta = document.getElementById('btn-buscar-venta');
+    if (btnBuscarVenta) {
+        btnBuscarVenta.addEventListener('click', buscarPorA2);
+    }
+
+    // Búsqueda por cliente
+    const buscarCliente = document.getElementById('buscar-cliente-pago');
+    if (buscarCliente) {
+        buscarCliente.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') await buscarPorCliente();
+        });
+    }
+
+    // Guardar y limpiar
+    const btnGuardar = document.getElementById('btn-guardar-pago');
+    if (btnGuardar) {
+        btnGuardar.addEventListener('click', guardarPago);
+    }
+
+    const btnLimpiar = document.getElementById('btn-limpiar-pago');
+    if (btnLimpiar) {
+        btnLimpiar.addEventListener('click', limpiarFormularioPago);
+    }
+
+    // Refrescar tasa
+    const btnRefresh = document.getElementById('btn-refresh-tasa');
+    if (btnRefresh) {
+        btnRefresh.addEventListener('click', async () => {
+            if (typeof invalidateTasaCache === 'function') invalidateTasaCache();
+            if (typeof showAlert === 'function') showAlert('Actualizando tasa BCV...', 'info');
+            if (typeof actualizarDisplayTasa === 'function') await actualizarDisplayTasa('#tasa-bcv');
+            if (typeof cargarTasaActual === 'function') cargarTasaActual('p');
+        });
+    }
+
+    // Fecha por defecto
+    const pFecha = document.getElementById('p-fecha');
+    if (pFecha && typeof getTodayISO === 'function') {
+        pFecha.value = getTodayISO();
+    }
+}
+
+// ============================================
+// FUNCIONES AUXILIARES (faltantes)
+// ============================================
+
+// Calcula el saldo de una venta sumando todos sus pagos
+async function calcularSaldoVenta(ventaId) {
+    try {
+        // Obtener la venta
+        const { data: venta, error: vError } = await supabaseClient
+            .from('ventas')
+            .select('monto_total_usd, total_con_iva, numero_factura')
+            .eq('id', ventaId)
+            .single();
+        if (vError) throw vError;
+
+        // Obtener los pagos de esa venta
+        const { data: pagos, error: pError } = await supabaseClient
+            .from('pagos')
+            .select('monto_pagado_usd')
+            .eq('venta_id', ventaId);
+        if (pError) throw pError;
+
+        const totalPagado = pagos.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd || 0), 0);
+        const tieneFactura = venta.numero_factura && venta.numero_factura.trim() !== '';
+        const montoTotalAPagar = tieneFactura ? (venta.total_con_iva || venta.monto_total_usd) : venta.monto_total_usd;
+
+        return montoTotalAPagar - totalPagado;
+    } catch (error) {
+        console.error('Error calculando saldo de venta:', error);
+        return 0;
+    }
+}
 
 // ============================================
 // INICIALIZACION
@@ -111,37 +222,6 @@ function updateUserAvatarPagos() {
         const initials = user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
         avatarEl.textContent = initials;
     }
-}
-
-function setupEventListenersPagos() {
-    document.getElementById('select-venta').addEventListener('change', async (e) => {
-        if (e.target.value) {
-            await seleccionarVenta(e.target.value);
-        } else {
-            ocultarDetalleVenta();
-        }
-    });
-
-    document.getElementById('buscar-a2').addEventListener('keydown', async (e) => {
-        if (e.key === 'Enter') await buscarPorA2();
-    });
-    document.getElementById('btn-buscar-venta').addEventListener('click', buscarPorA2);
-
-    document.getElementById('buscar-cliente-pago').addEventListener('keydown', async (e) => {
-        if (e.key === 'Enter') await buscarPorCliente();
-    });
-
-    document.getElementById('btn-guardar-pago').addEventListener('click', );
-    document.getElementById('btn-limpiar-pago').addEventListener('click', limpiarFormularioPago);
-
-    document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
-        invalidateTasaCache();
-        showAlert('Actualizando tasa BCV...', 'info');
-        await actualizarDisplayTasa('#tasa-bcv');
-        cargarTasaActual('p');
-    });
-
-    document.getElementById('p-fecha').value = getTodayISO();
 }
 
 // ============================================
@@ -526,7 +606,7 @@ function manejarCambioFecha(prefix) {
 }
 
 // ============================================
-// GUARDAR PAGO (CREACIÓN)
+// GUARDAR PAGO (CREACIÓN) - CORREGIDO
 // ============================================
 
 async function guardarPago() {
@@ -1316,7 +1396,6 @@ async function confirmarDistribucion() {
         showAlert('Error al registrar los pagos: ' + error.message, 'error');
     }
 }
-
 
 // ============================================
 // EXPORTAR FUNCIONES GLOBALES

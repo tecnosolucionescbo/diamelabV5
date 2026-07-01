@@ -26,55 +26,39 @@ let observer = null;
 // ============================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('✅ ventas.js: DOM cargado');
-
     const isAuth = await protectRoute();
     if (!isAuth) return;
 
     initNavigation();
     updateUserAvatarVentas();
 
-    // === LEER FILTRO DESDE URL (para navegación desde Dashboard) ===
+    // === LEER FILTRO DESDE URL ===
     const urlParams = new URLSearchParams(window.location.search);
     const filtroFactura = urlParams.get('filtro');
 
     if (filtroFactura === 'facturadas') {
         const selectFacturado = document.getElementById('filtro-facturado');
         if (selectFacturado) selectFacturado.value = 'si';
-        console.log('🔍 Filtro aplicado: Facturadas');
     } else if (filtroFactura === 'pendientes') {
         const selectFacturado = document.getElementById('filtro-facturado');
         if (selectFacturado) selectFacturado.value = 'no';
-        console.log('🔍 Filtro aplicado: Pendientes de facturar');
     }
-    // ============================================
 
     // Cargar tasa BCV
-    console.log('🔍 Cargando tasa BCV...');
     await actualizarDisplayTasa('#tasa-bcv');
-    console.log('✅ Tasa BCV cargada');
 
     // Setup sede segun usuario
     setupSedeUsuario();
 
     // Cargar clientes y ventas
-    console.log('🔍 Cargando clientes...');
     await cargarClientes();
-    console.log('✅ Clientes cargados');
-
-    console.log('🔍 Cargando ventas...');
     await cargarVentas(true);
-    console.log('✅ Ventas cargadas');
 
     // Configurar eventos
     setupEventListeners();
 
     // Configurar observer para infinite scroll
     configurarObserver();
-
-    // ============ NUEVO: Configurar eventos de facturación ============
-    setupFacturacionListeners();
-    console.log('✅ Eventos de facturación configurados');
 });
 
 // ============================================
@@ -116,8 +100,6 @@ function setupSedeUsuario() {
 // ============================================
 
 function setupEventListeners() {
-    console.log('🔍 Configurando eventos principales...');
-
     // Filtros
     document.getElementById('btn-filtrar').addEventListener('click', () => cargarVentas(true));
     document.getElementById('btn-limpiar').addEventListener('click', limpiarFiltros);
@@ -171,63 +153,18 @@ function setupEventListeners() {
     document.getElementById('modal-facturacion').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) cerrarModalFacturacion();
     });
-
-    console.log('✅ Eventos principales configurados');
 }
 
 // ============================================
-// CONFIGURAR EVENTOS DE FACTURACIÓN (NUEVO)
+// CONFIGURAR EVENTOS DE FACTURACIÓN
 // ============================================
 
 function setupFacturacionListeners() {
-    console.log('🔍 Configurando eventos de facturación...');
-
-    const btnCerrar = document.getElementById('btn-cerrar-facturacion');
-    const btnCancelar = document.getElementById('btn-cancelar-facturacion');
-    const btnGuardar = document.getElementById('btn-guardar-facturacion');
-    const btnQuitar = document.getElementById('btn-quitar-facturacion');
-    const btnCalcular = document.getElementById('btn-calcular-iva');
-
-    if (btnCerrar) {
-        btnCerrar.addEventListener('click', cerrarModalFacturacion);
-        console.log('✅ Evento cerrar facturación asignado');
-    } else {
-        console.warn('⚠️ btn-cerrar-facturacion no encontrado');
-    }
-
-    if (btnCancelar) {
-        btnCancelar.addEventListener('click', cerrarModalFacturacion);
-        console.log('✅ Evento cancelar facturación asignado');
-    } else {
-        console.warn('⚠️ btn-cancelar-facturacion no encontrado');
-    }
-
-    if (btnGuardar) {
-        btnGuardar.addEventListener('click', function(e) {
-            console.log('🔄 Botón Guardar Factura clickeado');
-            guardarFacturacion();
-        });
-        console.log('✅ Evento guardar facturación asignado');
-    } else {
-        console.error('❌ btn-guardar-facturacion NO ENCONTRADO en el DOM');
-    }
-
-    if (btnQuitar) {
-        btnQuitar.addEventListener('click', quitarFacturacion);
-        console.log('✅ Evento quitar facturación asignado');
-    } else {
-        console.warn('⚠️ btn-quitar-facturacion no encontrado');
-    }
-
-    if (btnCalcular) {
-        btnCalcular.addEventListener('click', function(e) {
-            console.log('🔄 Botón Calcular IVA clickeado');
-            calcularIVA();
-        });
-        console.log('✅ Evento calcular IVA asignado');
-    } else {
-        console.warn('⚠️ btn-calcular-iva no encontrado');
-    }
+    document.getElementById('btn-cerrar-facturacion').addEventListener('click', cerrarModalFacturacion);
+    document.getElementById('btn-cancelar-facturacion').addEventListener('click', cerrarModalFacturacion);
+    document.getElementById('btn-guardar-facturacion').addEventListener('click', guardarFacturacion);
+    document.getElementById('btn-quitar-facturacion').addEventListener('click', quitarFacturacion);
+    document.getElementById('btn-calcular-iva').addEventListener('click', calcularIVA);
 }
 
 // ============================================
@@ -291,7 +228,7 @@ async function cargarVentas(reiniciar = true) {
             if (paginacion.offset === 0) {
                 const tbody = document.getElementById('tbody-ventas');
                 tbody.innerHTML = `
-                    <tr><td colspan="9">
+                    <tr><td colspan="10">
                         <div class="empty-state">
                             <div class="empty-state-icon">📄</div>
                             <h3>Sin notas de entrega</h3>
@@ -335,24 +272,36 @@ async function cargarVentas(reiniciar = true) {
     }
 }
 
+// ============================================
+// OBTENER FILTROS (CON LIMPIEZA DE BÚSQUEDA)
+// ============================================
+
 function obtenerFiltros() {
     const estado = document.getElementById('filtro-estado').value;
     const sede = document.getElementById('filtro-sede').value;
     const fechaDesde = document.getElementById('filtro-fecha-desde').value;
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
-    const busqueda = document.getElementById('filtro-busqueda').value.trim();
     const facturado = document.getElementById('filtro-facturado').value;
+
+    // === LIMPIAR BÚSQUEDA ===
+    let busqueda = document.getElementById('filtro-busqueda').value.trim();
+    busqueda = busqueda.replace(/\s+/g, ' '); // múltiples espacios a uno
+    busqueda = busqueda.replace(/[,.;:]/g, ''); // eliminar comas, puntos, etc.
 
     const filtros = {};
     if (estado) filtros.estado = estado;
     if (sede) filtros.sede = sede;
     if (fechaDesde) filtros.fecha_desde = fechaDesde;
     if (fechaHasta) filtros.fecha_hasta = fechaHasta;
-    if (busqueda) filtros.busqueda = busqueda;
     if (facturado === 'si') filtros.facturado = true;
     if (facturado === 'no') filtros.facturado = false;
+    if (busqueda) filtros.busqueda = busqueda;
     return filtros;
 }
+
+// ============================================
+// GENERAR FILA DE VENTA (CON IVA Y TOTAL)
+// ============================================
 
 function generarFilaVenta(v) {
     const badgeClass = {
@@ -369,29 +318,23 @@ function generarFilaVenta(v) {
     const vencimientoClass = diasRestantes < 0 ? 'text-danger' : diasRestantes <= 3 ? 'text-warning' : '';
     const vencText = diasRestantes < 0 ? 'Vencido' : `${diasRestantes}d`;
 
-    // === FACTURACIÓN ===
     const tieneFactura = v.numero_factura && v.numero_factura.trim() !== '';
     const facturaBadge = tieneFactura
         ? `<span class="badge badge-pagada" style="font-size:0.7rem;">✅ Facturada</span>`
         : `<span class="badge badge-pendiente" style="font-size:0.7rem;">⏳ Pendiente</span>`;
-    const facturaNumero = tieneFactura ? v.numero_factura : '-';
 
-    // === MONTO CON IVA ===
     const montoBase = parseFloat(v.monto_total_usd) || 0;
     const montoIVA = parseFloat(v.monto_iva) || 0;
     const totalConIVA = parseFloat(v.total_con_iva) || montoBase;
 
-    // Si tiene factura, mostramos el total con IVA como principal, y el IVA aparte
     const montoMostrar = tieneFactura ? totalConIVA : montoBase;
     const ivaMostrar = tieneFactura ? montoIVA : 0;
 
-    // Formatear para mostrar en la columna Monto: si tiene factura, poner el total con IVA en negrita y el base pequeño
     let montoHtml = `<strong>${formatUSD(montoMostrar)}</strong>`;
     if (tieneFactura) {
         montoHtml += `<br><small style="color: var(--gray-500);">Base: ${formatUSD(montoBase)}</small>`;
     }
 
-    // Columna IVA: mostrar solo si tiene factura
     const ivaHtml = tieneFactura
         ? `<span style="color: var(--warning); font-weight: 600;">${formatUSD(montoIVA)}</span>`
         : `<span style="color: var(--gray-400);">-</span>`;
@@ -427,7 +370,7 @@ function mostrarCargaInfinita(mostrar) {
     if (!indicador) {
         indicador = document.createElement('tr');
         indicador.id = 'carga-infinita-indicador';
-        indicador.innerHTML = `<td colspan="9" style="text-align: center; padding: 1rem;">
+        indicador.innerHTML = `<td colspan="10" style="text-align: center; padding: 1rem;">
             <div class="spinner" style="border-color: var(--gray-200); border-top-color: var(--diamelab-primary);"></div>
             <p style="margin-top: 0.5rem; color: var(--gray-400);">Cargando más notas...</p>
         </td>`;
@@ -451,7 +394,7 @@ function configurarObserver() {
     if (!target) {
         target = document.createElement('tr');
         target.id = 'observer-target';
-        target.innerHTML = `<td colspan="9" style="height: 20px;"></td>`;
+        target.innerHTML = `<td colspan="10" style="height: 20px;"></td>`;
         const tbody = document.getElementById('tbody-ventas');
         tbody.appendChild(target);
     }
@@ -812,12 +755,10 @@ function cerrarModalVerVenta() {
 }
 
 // ============================================
-// FACTURACIÓN - ABRIR MODAL
+// FACTURACIÓN
 // ============================================
 
 window.abrirModalFacturacion = async function(ventaId) {
-    console.log('🔄 abrirModalFacturacion llamado con ID:', ventaId);
-
     if (!ventaId) {
         showAlert('No se identificó la nota de entrega.', 'error');
         return;
@@ -830,96 +771,59 @@ window.abrirModalFacturacion = async function(ventaId) {
             return;
         }
 
-        console.log('📊 Datos de venta cargados:', venta);
-
         document.getElementById('f-venta-id').value = venta.id;
         document.getElementById('f-numero-factura').value = venta.numero_factura || '';
         document.getElementById('f-fecha-factura').value = venta.fecha_factura || '';
         document.getElementById('f-monto-iva').value = venta.monto_iva || '';
         document.getElementById('f-monto-base').value = formatUSD(venta.monto_total_usd);
         
-        // Calcular total con IVA
         const montoBase = parseFloat(venta.monto_total_usd) || 0;
         const montoIva = parseFloat(venta.monto_iva) || 0;
         const totalConIva = montoBase + montoIva;
         document.getElementById('f-total-con-iva').value = formatUSD(totalConIva);
 
-        console.log('📊 Monto base:', montoBase, 'IVA:', montoIva, 'Total:', totalConIva);
-
         const btnQuitar = document.getElementById('btn-quitar-facturacion');
         if (venta.numero_factura && venta.numero_factura.trim() !== '') {
             btnQuitar.style.display = '';
-            console.log('🔍 Venta ya facturada, mostrando botón Quitar');
         } else {
             btnQuitar.style.display = 'none';
-            console.log('🔍 Venta sin facturar');
         }
 
         document.getElementById('modal-facturacion').style.display = 'flex';
-        console.log('✅ Modal de facturación abierto');
 
     } catch (error) {
-        console.error('❌ Error al abrir facturación:', error);
-        showAlert('Error al cargar datos de facturación: ' + error.message, 'error');
+        console.error('Error al abrir facturación:', error);
+        showAlert('Error al cargar datos de facturación.', 'error');
     }
 };
 
 function cerrarModalFacturacion() {
-    console.log('🔄 Cerrando modal de facturación');
     document.getElementById('modal-facturacion').style.display = 'none';
 }
 
-// ============================================
-// CALCULAR IVA (16%)
-// ============================================
-
 function calcularIVA() {
-    console.log('🔄 calcularIVA() ejecutado');
-    
     const ventaId = document.getElementById('f-venta-id').value;
-    if (!ventaId) {
-        showAlert('No se puede calcular el IVA: falta la nota.', 'error');
-        return;
-    }
+    if (!ventaId) return;
 
     const montoBaseText = document.getElementById('f-monto-base').value;
     const montoBase = parseFloat(montoBaseText.replace(/[$,]/g, '')) || 0;
-
-    console.log('📊 Monto base detectado:', montoBase);
 
     if (montoBase <= 0) {
         showAlert('El monto base debe ser mayor a cero para calcular el IVA.', 'warning');
         return;
     }
 
-    const iva = montoBase * 0.16; // 16% de IVA
-    const totalConIva = montoBase + iva;
-
+    const iva = montoBase * 0.16;
     document.getElementById('f-monto-iva').value = iva.toFixed(2);
+    const totalConIva = montoBase + iva;
     document.getElementById('f-total-con-iva').value = formatUSD(totalConIva);
-
-    console.log('✅ IVA calculado:', iva, 'Total con IVA:', totalConIva);
-    showAlert(`IVA calculado: $${iva.toFixed(2)}`, 'info');
 }
 
-// ============================================
-// GUARDAR FACTURACIÓN
-// ============================================
-
 async function guardarFacturacion() {
-    console.log('🔄 guardarFacturacion() ejecutado');
-
     const ventaId = document.getElementById('f-venta-id').value;
     const numeroFactura = document.getElementById('f-numero-factura').value.trim();
     const fechaFactura = document.getElementById('f-fecha-factura').value;
     const montoIva = parseFloat(document.getElementById('f-monto-iva').value) || 0;
-
-    console.log('📊 Datos de facturación:', { ventaId, numeroFactura, fechaFactura, montoIva });
-
-    if (!ventaId) {
-        showAlert('Error: No se identificó la nota de entrega.', 'error');
-        return;
-    }
 
     if (!numeroFactura) {
         showAlert('Debe ingresar el número de factura.', 'error');
@@ -937,8 +841,6 @@ async function guardarFacturacion() {
         await actualizarFacturaVenta(ventaId, numeroFactura, montoIva, fechaFactura);
 
         hideLoading('#btn-guardar-facturacion');
-        console.log('✅ Factura guardada/actualizada exitosamente');
-
         showAlert('Factura asociada exitosamente.', 'success');
         cerrarModalFacturacion();
         await cargarVentas(true);
@@ -949,18 +851,12 @@ async function guardarFacturacion() {
 
     } catch (error) {
         hideLoading('#btn-guardar-facturacion');
-        console.error('❌ Error guardando facturación:', error);
+        console.error('Error guardando facturación:', error);
         showAlert('Error al guardar: ' + error.message, 'error');
     }
 }
 
-// ============================================
-// QUITAR FACTURACIÓN
-// ============================================
-
 async function quitarFacturacion() {
-    console.log('🔄 quitarFacturacion() ejecutado');
-
     const confirmado = await confirmAction('¿Está seguro de eliminar la factura asociada a esta nota?');
     if (!confirmado) return;
 
@@ -1006,7 +902,7 @@ window.anularVentaConfirm = async function(ventaId) {
 };
 
 // ============================================
-// ELIMINAR VENTA (SOLO ADMIN, PERMANENTE)
+// ELIMINAR VENTA
 // ============================================
 
 window.eliminarVentaConfirm = async function(ventaId) {

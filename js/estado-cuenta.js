@@ -1,16 +1,27 @@
 /**
  * Módulo de Estado de Cuenta por Cliente
- * VERSIÓN CORREGIDA:
- * - Elimina duplicación de 'debounce' (usa la de utils.js)
- * - Buscador inteligente de clientes (autocompletado)
- * - PDF con jspdf-autotable (sin errores)
- * - Filtro de fechas corregido
- * - Cálculo de días de mora solo para notas vencidas
+ * VERSIÓN CON:
+ * - Buscador por texto con autocompletado
+ * - Selector desplegable con todos los clientes
+ * - Preselección desde URL (?cliente=ID)
  */
 
 let clientesCache = [];
 let datosEstado = [];
 let clienteSeleccionado = null;
+
+// Debounce para el buscador
+const debounce = (func, wait) => {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = await protectRoute();
@@ -21,8 +32,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await actualizarDisplayTasa('#tasa-bcv');
 
-    // Cargar clientes en caché
+    // Cargar clientes
     await cargarClientes();
+
+    // Leer parámetro de URL (para venir desde Notas de Entrega)
+    const urlParams = new URLSearchParams(window.location.search);
+    const clienteIdUrl = urlParams.get('cliente');
 
     // Eventos
     document.getElementById('btn-generar').addEventListener('click', generarEstadoCuenta);
@@ -33,10 +48,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         await actualizarDisplayTasa('#tasa-bcv');
     });
 
-    // Buscador de clientes (usa debounce de utils.js)
+    // Buscador de clientes con debounce
     const inputBusqueda = document.getElementById('cliente-busqueda');
     const resultados = document.getElementById('resultados-clientes');
+    const selectClientes = document.getElementById('cliente-select');
 
+    // Sincronizar buscador con selector
     inputBusqueda.addEventListener('input', debounce(async (e) => {
         const query = e.target.value.trim();
         if (query.length < 2) {
@@ -62,23 +79,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         `).join('');
         resultados.style.display = 'block';
 
-        // Asignar eventos a los items
         resultados.querySelectorAll('.item').forEach(el => {
             el.addEventListener('click', () => {
-                const id = el.dataset.id;
-                const nombre = el.dataset.nombre;
-                const rif = el.dataset.rif;
-                inputBusqueda.value = nombre + ' (' + rif + ')';
-                document.getElementById('cliente-seleccionado').value = id;
-                clienteSeleccionado = clientesCache.find(c => c.id === id);
+                seleccionarCliente(el.dataset.id, el.dataset.nombre, el.dataset.rif);
                 resultados.style.display = 'none';
             });
         });
     }, 300));
 
+    // Evento del selector desplegable
+    selectClientes.addEventListener('change', () => {
+        const id = selectClientes.value;
+        if (id) {
+            const cliente = clientesCache.find(c => c.id === id);
+            if (cliente) {
+                seleccionarCliente(cliente.id, cliente.razon_social, cliente.rif);
+            }
+        } else {
+            document.getElementById('cliente-busqueda').value = '';
+            document.getElementById('cliente-seleccionado').value = '';
+            clienteSeleccionado = null;
+        }
+    });
+
     // Cerrar resultados al hacer click fuera
     document.addEventListener('click', (e) => {
-        if (!e.target.closest('.cliente-busqueda-container')) {
+        if (!e.target.closest('.busqueda-wrapper')) {
             resultados.style.display = 'none';
         }
     });
@@ -98,7 +124,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
     document.getElementById('fecha-desde').value = primerDia.toISOString().split('T')[0];
     document.getElementById('fecha-hasta').value = hoy.toISOString().split('T')[0];
+
+    // Si vino con clienteId en URL, preseleccionarlo y generar automáticamente
+    if (clienteIdUrl) {
+        const cliente = clientesCache.find(c => c.id === clienteIdUrl);
+        if (cliente) {
+            seleccionarCliente(cliente.id, cliente.razon_social, cliente.rif);
+            // Generar automáticamente después de un breve retraso
+            setTimeout(() => generarEstadoCuenta(), 500);
+        }
+    }
 });
+
+// ============================================
+// FUNCIÓN PARA SELECCIONAR CLIENTE
+// ============================================
+
+function seleccionarCliente(id, nombre, rif) {
+    const input = document.getElementById('cliente-busqueda');
+    const hidden = document.getElementById('cliente-seleccionado');
+    const select = document.getElementById('cliente-select');
+
+    input.value = nombre + ' (' + rif + ')';
+    hidden.value = id;
+    clienteSeleccionado = clientesCache.find(c => c.id === id);
+    // Sincronizar el select
+    select.value = id;
+    // Ocultar resultados
+    document.getElementById('resultados-clientes').style.display = 'none';
+}
 
 // ============================================
 // CARGAR CLIENTES
@@ -107,6 +161,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function cargarClientes() {
     try {
         clientesCache = await getClientes();
+        // Llenar el selector desplegable
+        const select = document.getElementById('cliente-select');
+        select.innerHTML = '<option value="">Seleccionar de la lista...</option>' +
+            clientesCache.map(c => `<option value="${c.id}">${c.razon_social} (${c.rif})</option>`).join('');
     } catch (error) {
         console.error('Error cargando clientes:', error);
         showAlert('Error al cargar clientes', 'error');
@@ -123,15 +181,17 @@ async function generarEstadoCuenta() {
     const fechaHasta = document.getElementById('fecha-hasta').value;
 
     if (!clienteId) {
-        showAlert('Seleccione un cliente de la lista de búsqueda.', 'warning');
+        showAlert('Seleccione un cliente de la lista de búsqueda o del desplegable.', 'warning');
         return;
     }
 
     try {
         showLoading('#btn-generar', 'Generando...');
 
+        // Obtener el cliente seleccionado
         clienteSeleccionado = clientesCache.find(c => c.id === clienteId);
 
+        // Obtener ventas del cliente con pagos
         const filtros = { cliente_id: clienteId };
         if (fechaDesde) filtros.fecha_desde = fechaDesde;
         if (fechaHasta) filtros.fecha_hasta = fechaHasta;
@@ -146,6 +206,7 @@ async function generarEstadoCuenta() {
             return;
         }
 
+        // Procesar datos
         datosEstado = ventas.map(v => {
             const pagos = v.pagos || [];
             const totalPagado = pagos.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
@@ -178,6 +239,7 @@ async function generarEstadoCuenta() {
             };
         });
 
+        // Calcular resumen
         const totalFacturado = datosEstado.reduce((sum, v) => sum + v.totalConIVA, 0);
         const totalPagado = datosEstado.reduce((sum, v) => sum + v.totalPagado, 0);
         const saldoTotal = totalFacturado - totalPagado;
@@ -187,6 +249,7 @@ async function generarEstadoCuenta() {
             ? Math.round(notasConMora.reduce((sum, v) => sum + v.diasMora, 0) / notasConMora.length)
             : 0;
 
+        // Mostrar resumen
         document.getElementById('resumen-container').style.display = '';
         document.getElementById('res-total-facturado').textContent = formatUSD(totalFacturado);
         document.getElementById('res-total-pagado').textContent = formatUSD(totalPagado);
@@ -194,6 +257,7 @@ async function generarEstadoCuenta() {
         document.getElementById('res-cantidad-notas').textContent = cantidadNotas;
         document.getElementById('res-dias-mora').textContent = diasMoraPromedio;
 
+        // Mostrar tabla
         renderizarTabla(datosEstado);
         document.getElementById('detalle-container').style.display = '';
 

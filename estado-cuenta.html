@@ -7,8 +7,9 @@
     <link rel="stylesheet" href="css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Para PDF: jspdf + jspdf-autotable -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <style>
         .resumen-estado {
             display: grid;
@@ -51,6 +52,39 @@
             border-radius: var(--radius-full);
             font-size: 0.7rem;
             font-weight: 600;
+        }
+        /* Estilos para el buscador de clientes */
+        .cliente-busqueda-container {
+            position: relative;
+        }
+        .cliente-busqueda-container .resultados {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--white);
+            border: 1px solid var(--gray-300);
+            border-radius: var(--radius-md);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: var(--shadow-md);
+        }
+        .cliente-busqueda-container .resultados .item {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--gray-100);
+        }
+        .cliente-busqueda-container .resultados .item:hover {
+            background: var(--gray-50);
+        }
+        .cliente-busqueda-container .resultados .item:last-child {
+            border-bottom: none;
+        }
+        .cliente-busqueda-container .resultados .item .rif {
+            font-size: 0.75rem;
+            color: var(--gray-500);
         }
     </style>
 </head>
@@ -141,15 +175,17 @@
             </header>
 
             <div class="content-area">
-                <!-- Filtros -->
+                <!-- Filtros con buscador de clientes -->
                 <div class="card" style="margin-bottom: var(--space-lg);">
                     <div class="card-body">
                         <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: var(--space-md); align-items: flex-end;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label class="form-label">Cliente <span class="required">*</span></label>
-                                <select id="select-cliente" class="form-control form-select">
-                                    <option value="">Seleccione un cliente...</option>
-                                </select>
+                                <div class="cliente-busqueda-container">
+                                    <input type="text" id="cliente-busqueda" class="form-control" placeholder="Buscar por nombre o RIF..." autocomplete="off">
+                                    <input type="hidden" id="cliente-seleccionado" value="">
+                                    <div class="resultados" id="resultados-clientes"></div>
+                                </div>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label class="form-label">Fecha Desde</label>
@@ -218,7 +254,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="tbody-estado">
-                                    <tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--gray-400);">Seleccione un cliente y haga clic en "Generar".</td></tr>
+                                    <tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--gray-400);">Busque y seleccione un cliente, luego haga clic en "Generar".</td></tr>
                                 </tbody>
                             </table>
                         </div>

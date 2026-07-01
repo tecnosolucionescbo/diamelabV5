@@ -1,12 +1,13 @@
 /**
  * Sistema Diamelab - Modulo de Pagos
- * VERSIÓN CORREGIDA - Incluye cliente_id en todas las consultas
+ * VERSIÓN DEFINITIVA - MODAL DE DISTRIBUCIÓN AUTOCONTENIDO
  */
 
 // Estado global
 let ventasCache = [];
 let ventaSeleccionada = null;
 let pagosCache = [];
+let distribucionData = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = await protectRoute();
@@ -655,7 +656,7 @@ async function guardarPago() {
             return;
         }
 
-        // 3. Mostrar modal de distribución
+        // 3. Mostrar modal de distribución (AUTOCONTENIDO)
         await mostrarModalDistribucion(ventaSeleccionada, saldo, montoUSD, notasConSaldo, {
             fechaPago,
             metodoPago,
@@ -1111,14 +1112,80 @@ async function guardarPagoSimple(ventaId, montoUSD, fechaPago, metodoPago, tasaU
 }
 
 // ============================================
-// MODAL DE DISTRIBUCIÓN (sin cambios)
+// MODAL DE DISTRIBUCIÓN (AUTOCONTENIDO - CREA EL MODAL SI NO EXISTE)
 // ============================================
-let distribucionData = null;
-
 async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTotal, notasDisponibles, datosPago) {
-    const excedente = montoTotal - saldoPrincipal;
-    const modal = document.getElementById('modal-distribucion');
+    // Verificar si el modal existe, si no, crearlo
+    let modal = document.getElementById('modal-distribucion');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-distribucion';
+        modal.className = 'modal-overlay';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header">
+                    <h3>Distribuir Pago en Múltiples Notas</h3>
+                    <button class="modal-close" id="btn-cerrar-distribucion">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
+                        <div style="background: var(--gray-50); padding: var(--space-sm); border-radius: var(--radius-md); text-align: center;">
+                            <small style="color: var(--gray-500);">Monto Total a Pagar</small>
+                            <div id="d-monto-total" style="font-size: 1.2rem; font-weight: 700; color: var(--diamelab-primary);">$0.00</div>
+                        </div>
+                        <div style="background: var(--gray-50); padding: var(--space-sm); border-radius: var(--radius-md); text-align: center;">
+                            <small style="color: var(--gray-500);">Saldo de la Nota Actual</small>
+                            <div id="d-saldo-nota" style="font-size: 1.2rem; font-weight: 700; color: var(--info);">$0.00</div>
+                        </div>
+                        <div style="background: var(--gray-50); padding: var(--space-sm); border-radius: var(--radius-md); text-align: center;">
+                            <small style="color: var(--gray-500);">Excedente a Distribuir</small>
+                            <div id="d-excedente" style="font-size: 1.2rem; font-weight: 700; color: var(--warning);">$0.00</div>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.9rem; color: var(--gray-600); margin-bottom: var(--space-sm);">
+                        Seleccione las notas a las que desea asignar el excedente y ajuste los montos:
+                    </p>
+                    <div style="overflow-x: auto; margin-bottom: var(--space-md);">
+                        <table class="table" style="min-width: 600px;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: center; width: 60px;">Incluir</th>
+                                    <th style="text-align: left;">Nota</th>
+                                    <th style="text-align: left;">Saldo</th>
+                                    <th style="text-align: center;">Monto a Pagar</th>
+                                    <th style="text-align: center;">Referencia</th>
+                                </tr>
+                            </thead>
+                            <tbody id="d-tbody-notas"></tbody>
+                        </table>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding-top: var(--space-md); border-top: 1px solid var(--gray-200);">
+                        <div>
+                            <span style="font-weight: 600;">Excedente restante: </span>
+                            <span id="d-excedente-restante" style="font-weight: 700; color: var(--diamelab-primary);">$0.00</span>
+                        </div>
+                        <div style="display: flex; gap: var(--space-sm);">
+                            <button class="btn btn-ghost" id="btn-cancelar-distribucion">Cancelar</button>
+                            <button class="btn btn-primary" id="btn-confirmar-distribucion">Confirmar Distribución</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
 
+        // Asignar eventos a los botones del modal
+        modal.querySelector('#btn-cerrar-distribucion').addEventListener('click', cerrarModalDistribucion);
+        modal.querySelector('#btn-cancelar-distribucion').addEventListener('click', cerrarModalDistribucion);
+        modal.querySelector('#btn-confirmar-distribucion').addEventListener('click', confirmarDistribucion);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) cerrarModalDistribucion();
+        });
+    }
+
+    // Ahora los elementos existen, proceder con la lógica
+    const excedente = montoTotal - saldoPrincipal;
     distribucionData = {
         ventaPrincipal,
         saldoPrincipal,
@@ -1129,13 +1196,13 @@ async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTot
         asignaciones: {}
     };
 
+    // Actualizar los valores en el modal
     document.getElementById('d-monto-total').textContent = formatUSD(montoTotal);
     document.getElementById('d-saldo-nota').textContent = formatUSD(saldoPrincipal);
     document.getElementById('d-excedente').textContent = formatUSD(excedente);
 
     const tbody = document.getElementById('d-tbody-notas');
     tbody.innerHTML = '';
-
     const referenciaBase = datosPago.referenciaOriginal || 'PAGO';
 
     notasDisponibles.forEach((nota, index) => {
@@ -1218,19 +1285,12 @@ async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTot
     });
 
     actualizarExcedenteRestante();
-
     modal.style.display = 'flex';
-
-    document.getElementById('btn-cerrar-distribucion').addEventListener('click', cerrarModalDistribucion);
-    document.getElementById('btn-cancelar-distribucion').addEventListener('click', cerrarModalDistribucion);
-    document.getElementById('btn-confirmar-distribucion').addEventListener('click', confirmarDistribucion);
-    modal.addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) cerrarModalDistribucion();
-    });
 }
 
 function cerrarModalDistribucion() {
-    document.getElementById('modal-distribucion').style.display = 'none';
+    const modal = document.getElementById('modal-distribucion');
+    if (modal) modal.style.display = 'none';
     distribucionData = null;
 }
 
@@ -1242,8 +1302,11 @@ function calcularExcedenteRestante() {
 
 function actualizarExcedenteRestante() {
     const restante = calcularExcedenteRestante();
-    document.getElementById('d-excedente-restante').textContent = formatUSD(Math.max(0, restante));
-    document.getElementById('d-excedente-restante').style.color = restante < 0 ? 'var(--danger)' : 'var(--diamelab-primary)';
+    const el = document.getElementById('d-excedente-restante');
+    if (el) {
+        el.textContent = formatUSD(Math.max(0, restante));
+        el.style.color = restante < 0 ? 'var(--danger)' : 'var(--diamelab-primary)';
+    }
 }
 
 async function confirmarDistribucion() {

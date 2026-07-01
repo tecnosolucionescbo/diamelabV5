@@ -285,15 +285,12 @@ function obtenerFiltros() {
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const facturado = document.getElementById('filtro-facturado').value;
 
-    // === LIMPIAR BÚSQUEDA ===
+    console.log('📅 Fecha Desde:', fechaDesde);
+    console.log('📅 Fecha Hasta:', fechaHasta);
+
     let busqueda = document.getElementById('filtro-busqueda').value.trim();
-    if (busqueda.includes(',')) {
-        busqueda = busqueda.split(',')[0].trim();
-    } else if (busqueda.includes(';')) {
-        busqueda = busqueda.split(';')[0].trim();
-    }
-    busqueda = busqueda.replace(/\.$/, '');
     busqueda = busqueda.replace(/\s+/g, ' ');
+    busqueda = busqueda.replace(/[,.;:]/g, '');
 
     const filtros = {};
     if (estado) filtros.estado = estado;

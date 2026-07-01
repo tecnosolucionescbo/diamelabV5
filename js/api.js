@@ -875,7 +875,108 @@ async function getAllPagosConFiltro(filtros = {}) {
     if (error) throw error;
     return data || [];
 }
+// ============================================
+// OBTENER NOTAS PENDIENTES DE UN CLIENTE
+// ============================================
 
+async function getNotasPendientesPorCliente(clienteId, excluirVentaId = null) {
+    let query = supabaseClient
+        .from('ventas')
+        .select(`
+            id,
+            correlacion_a2,
+            monto_total_usd,
+            total_con_iva,
+            monto_iva,
+            numero_factura,
+            fecha_emision,
+            fecha_vencimiento,
+            estado,
+            cliente:clientes(razon_social, rif)
+        `)
+        .eq('cliente_id', clienteId)
+        .neq('estado', 'anulada')
+        .neq('estado', 'pagada');
+
+    if (excluirVentaId) {
+        query = query.neq('id', excluirVentaId);
+    }
+
+    const { data, error } = await query.order('fecha_emision', { ascending: true });
+    if (error) throw error;
+    return data || [];
+}
+
+// ============================================
+// CALCULAR SALDO DE UNA VENTA
+// ============================================
+
+async function calcularSaldoVenta(ventaId) {
+    const { data: venta, error: vError } = await supabaseClient
+        .from('ventas')
+        .select('total_con_iva, monto_total_usd')
+        .eq('id', ventaId)
+        .single();
+    if (vError) throw vError;
+
+    const montoTotal = venta.total_con_iva || venta.monto_total_usd;
+
+    const { data: pagos, error: pError } = await supabaseClient
+        .from('pagos')
+        .select('monto_pagado_usd')
+        .eq('venta_id', ventaId);
+    if (pError) throw pError;
+
+    const totalPagado = pagos.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
+    return Math.max(0, montoTotal - totalPagado);
+}
+
+// ============================================
+// CREAR MÚLTIPLES PAGOS (DISTRIBUCIÓN)
+// ============================================
+
+async function createPagosMultiples(pagosData, comprobanteFile = null, retIVAFile = null, retISLRFile = null) {
+    // Subir archivos una sola vez
+    let comprobanteUrl = null;
+    let retIVAUrl = null;
+    let retISLRUrl = null;
+
+    if (comprobanteFile) {
+        comprobanteUrl = await uploadFile(comprobanteFile, 'comprobantes-pagos');
+    }
+    if (retIVAFile) {
+        retIVAUrl = await uploadFile(retIVAFile, 'retenciones-iva');
+    }
+    if (retISLRFile) {
+        retISLRUrl = await uploadFile(retISLRFile, 'retenciones-islr');
+    }
+
+    const resultados = [];
+    for (const pago of pagosData) {
+        const pagoCompleto = {
+            ...pago,
+            comprobante_url: comprobanteUrl,
+            retencion_iva_url: retIVAUrl,
+            retencion_islr_url: retISLRUrl
+        };
+
+        const { data, error } = await supabaseClient
+            .from('pagos')
+            .insert([pagoCompleto])
+            .select()
+            .single();
+
+        if (error) throw error;
+        resultados.push(data);
+    }
+
+    return resultados;
+}
+
+// Exportar
+window.getNotasPendientesPorCliente = getNotasPendientesPorCliente;
+window.calcularSaldoVenta = calcularSaldoVenta;
+window.createPagosMultiples = createPagosMultiples;
 // ============================================================
 // EXPORTAR PARA USO GLOBAL
 // ============================================================

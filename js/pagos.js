@@ -131,7 +131,7 @@ function setupEventListenersPagos() {
         if (e.key === 'Enter') await buscarPorCliente();
     });
 
-    document.getElementById('btn-guardar-pago').addEventListener('click', guardarPago);
+    document.getElementById('btn-guardar-pago').addEventListener('click', );
     document.getElementById('btn-limpiar-pago').addEventListener('click', limpiarFormularioPago);
 
     document.getElementById('btn-refresh-tasa').addEventListener('click', async () => {
@@ -568,10 +568,36 @@ async function guardarPago() {
         }
 
         // ===== EXCEDENTE: Buscar otras notas del cliente con saldo pendiente =====
-        const otrasNotas = await getNotasPendientesPorCliente(ventaSeleccionada.cliente_id, ventaSeleccionada.id);
-        const notasConSaldo = [];
+        const clienteId = ventaSeleccionada.cliente_id;
+        if (!clienteId) {
+            showAlert('La nota seleccionada no tiene cliente asociado. No se puede distribuir el excedente.', 'error');
+            return;
+        }
 
-        for (const nota of otrasNotas) {
+        // 1. Obtener todas las notas del mismo cliente (excepto la actual)
+        const { data: otrasNotas, error: errorNotas } = await supabaseClient
+            .from('ventas')
+            .select(`
+                id,
+                correlacion_a2,
+                monto_total_usd,
+                total_con_iva,
+                numero_factura,
+                estado,
+                fecha_emision,
+                cliente:clientes(id, razon_social, rif)
+            `)
+            .eq('cliente_id', clienteId)
+            .neq('id', ventaSeleccionada.id)
+            .neq('estado', 'pagada')
+            .neq('estado', 'anulada')
+            .order('fecha_emision', { ascending: false });
+
+        if (errorNotas) throw errorNotas;
+
+        // 2. Calcular saldo de cada nota
+        const notasConSaldo = [];
+        for (const nota of otrasNotas || []) {
             const saldoNota = await calcularSaldoVenta(nota.id);
             if (saldoNota > 0.01) {
                 notasConSaldo.push({ ...nota, saldo: saldoNota });
@@ -588,7 +614,7 @@ async function guardarPago() {
             return;
         }
 
-        // Mostrar modal de distribución
+        // 3. Mostrar modal de distribución
         await mostrarModalDistribucion(ventaSeleccionada, saldo, montoUSD, notasConSaldo, {
             fechaPago,
             metodoPago,

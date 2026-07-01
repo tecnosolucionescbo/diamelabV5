@@ -540,7 +540,7 @@ async function guardarPago() {
         const montoUSD = parseFloat(document.getElementById('p-monto-usd-calculado').value) || 0;
         const metodoPago = document.getElementById('p-metodo').value;
         const tasaUsada = parseFloat(document.getElementById('p-tasa').value);
-        const referencia = document.getElementById('p-referencia').value.trim() || null;
+        const referenciaOriginal = document.getElementById('p-referencia').value.trim() || null;
         const banco = document.getElementById('p-banco').value.trim() || null;
         const validado = document.getElementById('p-validado').checked;
 
@@ -555,43 +555,48 @@ async function guardarPago() {
             return;
         }
 
+        // Calcular saldo de la nota seleccionada
         const tieneFactura = ventaSeleccionada.numero_factura && ventaSeleccionada.numero_factura.trim() !== '';
         const montoTotalAPagar = tieneFactura ? (ventaSeleccionada.total_con_iva || ventaSeleccionada.monto_total_usd) : ventaSeleccionada.monto_total_usd;
         const totalPagado = pagosCache.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
         const saldo = montoTotalAPagar - totalPagado;
 
-        if (montoUSD > saldo + 0.01) {
-            const confirmed = await confirmAction(`El monto (${formatUSD(montoUSD)}) excede el saldo pendiente (${formatUSD(saldo)}). Desea continuar?`);
-            if (!confirmed) return;
+        // Si el monto pagado es menor o igual al saldo, pago normal
+        if (montoUSD <= saldo + 0.01) {
+            await guardarPagoSimple(ventaSeleccionada.id, montoUSD, fechaPago, metodoPago, tasaUsada, referenciaOriginal, banco, validado);
+            return;
         }
 
-        showLoading('#btn-guardar-pago', 'Registrando...');
+        // ===== EXCEDENTE: Buscar otras notas del cliente con saldo pendiente =====
+        const otrasNotas = await getNotasPendientesPorCliente(ventaSeleccionada.cliente_id, ventaSeleccionada.id);
+        const notasConSaldo = [];
 
-        const user = JSON.parse(localStorage.getItem('diamelab_user') || '{}');
+        for (const nota of otrasNotas) {
+            const saldoNota = await calcularSaldoVenta(nota.id);
+            if (saldoNota > 0.01) {
+                notasConSaldo.push({ ...nota, saldo: saldoNota });
+            }
+        }
 
-        const pagoData = {
-            venta_id: ventaSeleccionada.id,
-            vendedor_id: user.id,
-            fecha_pago: fechaPago,
-            monto_pagado_usd: montoUSD,
-            tasa_usada: tasaUsada,
-            metodo_pago: metodoPago,
-            referencia: referencia,
-            banco_origen: banco,
-            validado: validado
-        };
+        if (notasConSaldo.length === 0) {
+            const confirmado = await confirmAction(
+                `El monto (${formatUSD(montoUSD)}) excede el saldo pendiente (${formatUSD(saldo)}). ` +
+                `No hay otras notas de este cliente con saldo pendiente. ¿Desea continuar registrando el pago completo en esta nota?`
+            );
+            if (!confirmado) return;
+            await guardarPagoSimple(ventaSeleccionada.id, montoUSD, fechaPago, metodoPago, tasaUsada, referenciaOriginal, banco, validado);
+            return;
+        }
 
-        const comprobanteFile = document.getElementById('p-comprobante').files[0] || null;
-        const retIVAFile = document.getElementById('p-ret-iva').files[0] || null;
-        const retISLRFile = document.getElementById('p-ret-islr').files[0] || null;
-
-        await createPago(pagoData, comprobanteFile, retIVAFile, retISLRFile);
-
-        hideLoading('#btn-guardar-pago');
-        showAlert('Pago registrado exitosamente', 'success');
-
-        limpiarFormularioPago();
-        await seleccionarVenta(ventaSeleccionada.id);
+        // Mostrar modal de distribución
+        await mostrarModalDistribucion(ventaSeleccionada, saldo, montoUSD, notasConSaldo, {
+            fechaPago,
+            metodoPago,
+            tasaUsada,
+            referenciaOriginal,
+            banco,
+            validado
+        });
 
     } catch (error) {
         hideLoading('#btn-guardar-pago');

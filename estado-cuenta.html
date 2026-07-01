@@ -55,9 +55,17 @@
         }
         /* Estilos para el buscador de clientes */
         .cliente-busqueda-container {
-            position: relative;
+            display: flex;
+            gap: var(--space-sm);
+            align-items: center;
+            flex-wrap: wrap;
         }
-        .cliente-busqueda-container .resultados {
+        .cliente-busqueda-container .busqueda-wrapper {
+            flex: 1;
+            position: relative;
+            min-width: 200px;
+        }
+        .cliente-busqueda-container .busqueda-wrapper .resultados {
             position: absolute;
             top: 100%;
             left: 0;
@@ -71,20 +79,36 @@
             display: none;
             box-shadow: var(--shadow-md);
         }
-        .cliente-busqueda-container .resultados .item {
+        .cliente-busqueda-container .busqueda-wrapper .resultados .item {
             padding: 0.5rem 0.75rem;
             cursor: pointer;
             border-bottom: 1px solid var(--gray-100);
         }
-        .cliente-busqueda-container .resultados .item:hover {
+        .cliente-busqueda-container .busqueda-wrapper .resultados .item:hover {
             background: var(--gray-50);
         }
-        .cliente-busqueda-container .resultados .item:last-child {
+        .cliente-busqueda-container .busqueda-wrapper .resultados .item:last-child {
             border-bottom: none;
         }
-        .cliente-busqueda-container .resultados .item .rif {
+        .cliente-busqueda-container .busqueda-wrapper .resultados .item .rif {
             font-size: 0.75rem;
             color: var(--gray-500);
+        }
+        .cliente-busqueda-container .selector-wrapper {
+            min-width: 200px;
+        }
+        .cliente-busqueda-container .selector-wrapper select {
+            width: 100%;
+        }
+        @media (max-width: 768px) {
+            .cliente-busqueda-container {
+                flex-direction: column;
+            }
+            .cliente-busqueda-container .busqueda-wrapper,
+            .cliente-busqueda-container .selector-wrapper {
+                width: 100%;
+                min-width: unset;
+            }
         }
     </style>
 </head>
@@ -175,16 +199,23 @@
             </header>
 
             <div class="content-area">
-                <!-- Filtros con buscador de clientes -->
+                <!-- Filtros con buscador y selector -->
                 <div class="card" style="margin-bottom: var(--space-lg);">
                     <div class="card-body">
-                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: var(--space-md); align-items: flex-end;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--space-md); align-items: flex-end;">
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label class="form-label">Cliente <span class="required">*</span></label>
                                 <div class="cliente-busqueda-container">
-                                    <input type="text" id="cliente-busqueda" class="form-control" placeholder="Buscar por nombre o RIF..." autocomplete="off">
-                                    <input type="hidden" id="cliente-seleccionado" value="">
-                                    <div class="resultados" id="resultados-clientes"></div>
+                                    <div class="busqueda-wrapper">
+                                        <input type="text" id="cliente-busqueda" class="form-control" placeholder="Buscar por nombre o RIF..." autocomplete="off">
+                                        <input type="hidden" id="cliente-seleccionado" value="">
+                                        <div class="resultados" id="resultados-clientes"></div>
+                                    </div>
+                                    <div class="selector-wrapper">
+                                        <select id="cliente-select" class="form-control form-select">
+                                            <option value="">Seleccionar de la lista...</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">

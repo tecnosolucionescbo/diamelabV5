@@ -285,8 +285,8 @@ function obtenerFiltros() {
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const facturado = document.getElementById('filtro-facturado').value;
 
-    console.log('📅 Fecha Desde:', fechaDesde);
-    console.log('📅 Fecha Hasta:', fechaHasta);
+  //  console.log('📅 Fecha Desde:', fechaDesde);
+  //  console.log('📅 Fecha Hasta:', fechaHasta);
 
     let busqueda = document.getElementById('filtro-busqueda').value.trim();
     busqueda = busqueda.replace(/\s+/g, ' ');

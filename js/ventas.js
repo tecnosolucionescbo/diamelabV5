@@ -107,6 +107,11 @@ function setupEventListeners() {
     document.getElementById('filtro-busqueda').addEventListener('input', debounce(() => cargarVentas(true), 400));
     document.getElementById('filtro-estado').addEventListener('change', () => cargarVentas(true));
     document.getElementById('filtro-facturado').addEventListener('change', () => cargarVentas(true));
+
+    // === NUEVO: Eventos para fechas con actualización automática ===
+    document.getElementById('filtro-fecha-desde').addEventListener('change', () => cargarVentas(true));
+    document.getElementById('filtro-fecha-hasta').addEventListener('change', () => cargarVentas(true));
+
     const filtroSede = document.getElementById('filtro-sede');
     if (filtroSede) filtroSede.addEventListener('change', () => cargarVentas(true));
 
@@ -139,10 +144,6 @@ function setupEventListeners() {
         invalidateTasaCache();
         showAlert('Actualizando tasa BCV...', 'info');
         await actualizarDisplayTasa('#tasa-bcv');
-        // Si el modal de nueva venta está abierto, actualizar la tasa
-        if (document.getElementById('modal-venta').style.display === 'flex') {
-            cargarTasaActualEnModal();
-        }
     });
 
     // Cerrar modales al hacer click fuera

@@ -2,6 +2,7 @@
  * Sistema Diamelab - Modulo de Pagos
  * Versión con soporte para IVA, edición de pagos y conversión Bs. a USD
  * CORREGIDO: función toggleValidacionPago maneja modo global sin errores
+ * AHORA CON COLUMNA "MONTO (Bs.)" EN EL HISTORIAL
  */
 
 // Estado global
@@ -613,7 +614,7 @@ function limpiarFormularioPago() {
 }
 
 // ============================================
-// RENDERIZAR PAGOS
+// RENDERIZAR PAGOS (CON COLUMNA MONTO BS.)
 // ============================================
 
 function renderizarPagos() {
@@ -621,7 +622,7 @@ function renderizarPagos() {
 
     if (!pagosCache || pagosCache.length === 0) {
         tbody.innerHTML = `
-            <tr><td colspan="9">
+            <tr><td colspan="10">
                 <div class="empty-state">
                     <div class="empty-state-icon">&#128178;</div>
                     <h3>Sin pagos registrados</h3>
@@ -644,7 +645,7 @@ function renderizarPagos() {
 
     if (pagosFiltrados.length === 0) {
         tbody.innerHTML = `
-            <tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--gray-400);">
+            <tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--gray-400);">
                 No hay pagos ${filtro === 'validados' ? 'validados' : filtro === 'pendientes' ? 'pendientes' : ''} para mostrar.
             </td></tr>
         `;
@@ -671,6 +672,12 @@ function renderizarPagos() {
         if (p.retencion_islr_url) comps.push(`<a href="${p.retencion_islr_url}" target="_blank" style="color: var(--diamelab-primary); font-weight: 500;">ISLR</a>`);
         if (comps.length > 0) comprobantesHtml = comps.join(' | ');
 
+        // === MONTO EN BOLÍVARES ===
+        const montoUSD = parseFloat(p.monto_pagado_usd) || 0;
+        const tasa = parseFloat(p.tasa_usada) || 0;
+        const montoBs = montoUSD * tasa;
+        const montoBsFormateado = montoBs.toFixed(2).replace('.', ',');
+
         const validado = p.validado === true;
         const badgeValidado = validado 
             ? '<span class="badge badge-pagada">✅ Validado</span>' 
@@ -695,11 +702,12 @@ function renderizarPagos() {
         return `
             <tr>
                 <td>${formatDate(p.fecha_pago)}</td>
-                <td><strong>${formatUSD(p.monto_pagado_usd)}</strong></td>
+                <td><strong>${formatUSD(montoUSD)}</strong></td>
+                <td><strong style="color: var(--diamelab-primary);">Bs. ${montoBsFormateado}</strong></td>
                 <td><span class="badge badge-parcial">${metodoLabels[p.metodo_pago] || p.metodo_pago}</span></td>
                 <td>${p.referencia || '-'}</td>
                 <td>${p.banco_origen || '-'}</td>
-                <td>${formatNumber(p.tasa_usada, 4)}</td>
+                <td>${formatNumber(tasa, 4)}</td>
                 <td>${comprobantesHtml}</td>
                 <td style="text-align: center;">
                     ${badgeValidado}
@@ -839,7 +847,7 @@ window.eliminarPagoConfirm = async function(pagoId) {
 };
 
 // ============================================
-// TOGGLE VALIDACIÓN (CORREGIDO)
+// TOGGLE VALIDACIÓN
 // ============================================
 
 window.toggleValidacionPago = async function(pagoId, estadoActual) {
@@ -857,17 +865,14 @@ window.toggleValidacionPago = async function(pagoId, estadoActual) {
         await actualizarValidacionPago(pagoId, nuevoEstado);
         showAlert(`Pago ${nuevoEstado ? 'validado' : 'desmarcado'} correctamente.`, 'success');
 
-        // === CORRECCIÓN: Verificar si hay venta seleccionada ===
         if (ventaSeleccionada) {
             await seleccionarVenta(ventaSeleccionada.id);
         } else {
-            // Modo global: recargar con el filtro actual
             const urlParams = new URLSearchParams(window.location.search);
             const filtro = urlParams.get('filtro');
             if (filtro) {
                 await cargarPagosGlobales(filtro);
             } else {
-                // Si no hay filtro, simplemente recargar la vista actual
                 renderizarPagos();
             }
         }
@@ -878,7 +883,7 @@ window.toggleValidacionPago = async function(pagoId, estadoActual) {
 };
 
 // ============================================
-// PAGOS GLOBALES
+// PAGOS GLOBALES (CON COLUMNA MONTO BS.)
 // ============================================
 
 async function cargarPagosGlobales(filtro) {
@@ -918,7 +923,7 @@ function renderizarPagosGlobales() {
 
     if (!pagosCache || pagosCache.length === 0) {
         tbody.innerHTML = `
-            <tr><td colspan="9">
+            <tr><td colspan="10">
                 <div class="empty-state">
                     <div class="empty-state-icon">&#128178;</div>
                     <h3>Sin pagos</h3>
@@ -948,6 +953,12 @@ function renderizarPagosGlobales() {
         if (p.retencion_islr_url) comps.push(`<a href="${p.retencion_islr_url}" target="_blank" style="color: var(--diamelab-primary); font-weight: 500;">ISLR</a>`);
         if (comps.length > 0) comprobantesHtml = comps.join(' | ');
 
+        // === MONTO EN BOLÍVARES ===
+        const montoUSD = parseFloat(p.monto_pagado_usd) || 0;
+        const tasa = parseFloat(p.tasa_usada) || 0;
+        const montoBs = montoUSD * tasa;
+        const montoBsFormateado = montoBs.toFixed(2).replace('.', ',');
+
         const validado = p.validado === true;
         const badgeValidado = validado 
             ? '<span class="badge badge-pagada">✅ Validado</span>' 
@@ -974,11 +985,12 @@ function renderizarPagosGlobales() {
         return `
             <tr>
                 <td>${formatDate(p.fecha_pago)}</td>
-                <td><strong>${formatUSD(p.monto_pagado_usd)}</strong></td>
+                <td><strong>${formatUSD(montoUSD)}</strong></td>
+                <td><strong style="color: var(--diamelab-primary);">Bs. ${montoBsFormateado}</strong></td>
                 <td><span class="badge badge-parcial">${metodoLabels[p.metodo_pago] || p.metodo_pago}</span></td>
                 <td>${p.referencia || '-'}</td>
                 <td>${p.banco_origen || '-'}</td>
-                <td>${formatNumber(p.tasa_usada, 4)}</td>
+                <td>${formatNumber(tasa, 4)}</td>
                 <td>${comprobantesHtml}</td>
                 <td style="text-align: center;">
                     ${badgeValidado}

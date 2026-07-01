@@ -1,7 +1,7 @@
 /**
  * Módulo de Estado de Cuenta por Cliente
  * VERSIÓN CON:
- * - Buscador por texto con autocompletado
+ * - Buscador por texto con autocompletado (usa debounce global de utils.js)
  * - Selector desplegable con todos los clientes
  * - Preselección desde URL (?cliente=ID)
  */
@@ -9,19 +9,6 @@
 let clientesCache = [];
 let datosEstado = [];
 let clienteSeleccionado = null;
-
-// Debounce para el buscador
-const debounce = (func, wait) => {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-};
 
 document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = await protectRoute();
@@ -48,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await actualizarDisplayTasa('#tasa-bcv');
     });
 
-    // Buscador de clientes con debounce
+    // Buscador de clientes con debounce (global)
     const inputBusqueda = document.getElementById('cliente-busqueda');
     const resultados = document.getElementById('resultados-clientes');
     const selectClientes = document.getElementById('cliente-select');

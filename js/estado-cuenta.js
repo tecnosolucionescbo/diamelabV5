@@ -1,14 +1,25 @@
 /**
  * Módulo de Estado de Cuenta por Cliente
- * VERSIÓN CON:
- * - Buscador por texto con autocompletado (usa debounce global de utils.js)
- * - Selector desplegable con todos los clientes
- * - Preselección desde URL (?cliente=ID)
+ * VERSIÓN CON FECHA DESDE EN BLANCO Y FECHA HASTA = HOY
  */
 
 let clientesCache = [];
 let datosEstado = [];
 let clienteSeleccionado = null;
+let timeoutGenerar = null;
+
+// Debounce para el buscador
+const debounce = (func, wait) => {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = await protectRoute();
@@ -22,9 +33,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cargar clientes
     await cargarClientes();
 
-    // Leer parámetro de URL (para venir desde Notas de Entrega)
+    // Leer parámetro de URL (para venir desde Notas de Entrega o Dashboard)
     const urlParams = new URLSearchParams(window.location.search);
     const clienteIdUrl = urlParams.get('cliente');
+
+    // ===== FECHAS POR DEFECTO: DESDE EN BLANCO, HASTA = HOY =====
+    const hoy = new Date();
+    document.getElementById('fecha-desde').value = ''; // Vacío
+    document.getElementById('fecha-hasta').value = hoy.toISOString().split('T')[0];
 
     // Eventos
     document.getElementById('btn-generar').addEventListener('click', generarEstadoCuenta);
@@ -35,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await actualizarDisplayTasa('#tasa-bcv');
     });
 
-    // Buscador de clientes con debounce (global)
+    // Buscador de clientes con debounce
     const inputBusqueda = document.getElementById('cliente-busqueda');
     const resultados = document.getElementById('resultados-clientes');
     const selectClientes = document.getElementById('cliente-select');
@@ -70,6 +86,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             el.addEventListener('click', () => {
                 seleccionarCliente(el.dataset.id, el.dataset.nombre, el.dataset.rif);
                 resultados.style.display = 'none';
+                // Generar automáticamente después de seleccionar
+                clearTimeout(timeoutGenerar);
+                timeoutGenerar = setTimeout(() => generarEstadoCuenta(), 300);
             });
         });
     }, 300));
@@ -81,6 +100,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cliente = clientesCache.find(c => c.id === id);
             if (cliente) {
                 seleccionarCliente(cliente.id, cliente.razon_social, cliente.rif);
+                // Generar automáticamente después de seleccionar
+                clearTimeout(timeoutGenerar);
+                timeoutGenerar = setTimeout(() => generarEstadoCuenta(), 300);
             }
         } else {
             document.getElementById('cliente-busqueda').value = '';
@@ -106,18 +128,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Establecer fechas por defecto (primer día del mes hasta hoy)
-    const hoy = new Date();
-    const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    document.getElementById('fecha-desde').value = primerDia.toISOString().split('T')[0];
-    document.getElementById('fecha-hasta').value = hoy.toISOString().split('T')[0];
-
     // Si vino con clienteId en URL, preseleccionarlo y generar automáticamente
     if (clienteIdUrl) {
         const cliente = clientesCache.find(c => c.id === clienteIdUrl);
         if (cliente) {
             seleccionarCliente(cliente.id, cliente.razon_social, cliente.rif);
-            // Generar automáticamente después de un breve retraso
             setTimeout(() => generarEstadoCuenta(), 500);
         }
     }
@@ -135,9 +150,7 @@ function seleccionarCliente(id, nombre, rif) {
     input.value = nombre + ' (' + rif + ')';
     hidden.value = id;
     clienteSeleccionado = clientesCache.find(c => c.id === id);
-    // Sincronizar el select
     select.value = id;
-    // Ocultar resultados
     document.getElementById('resultados-clientes').style.display = 'none';
 }
 
@@ -148,7 +161,6 @@ function seleccionarCliente(id, nombre, rif) {
 async function cargarClientes() {
     try {
         clientesCache = await getClientes();
-        // Llenar el selector desplegable
         const select = document.getElementById('cliente-select');
         select.innerHTML = '<option value="">Seleccionar de la lista...</option>' +
             clientesCache.map(c => `<option value="${c.id}">${c.razon_social} (${c.rif})</option>`).join('');
@@ -175,15 +187,36 @@ async function generarEstadoCuenta() {
     try {
         showLoading('#btn-generar', 'Generando...');
 
-        // Obtener el cliente seleccionado
         clienteSeleccionado = clientesCache.find(c => c.id === clienteId);
 
-        // Obtener ventas del cliente con pagos
-        const filtros = { cliente_id: clienteId };
-        if (fechaDesde) filtros.fecha_desde = fechaDesde;
-        if (fechaHasta) filtros.fecha_hasta = fechaHasta;
+        // ===== CONSULTA CON FILTROS DE FECHA OPTATIVOS =====
+        let query = supabaseClient
+            .from('ventas')
+            .select(`
+                *,
+                cliente:clientes(razon_social, rif),
+                pagos:pagos(*)
+            `)
+            .eq('cliente_id', clienteId)
+            .neq('estado', 'anulada');
 
-        const { data: ventas } = await getVentas(filtros, null, 0);
+        // Solo aplicar filtro desde si tiene valor
+        if (fechaDesde && fechaDesde.trim() !== '') {
+            query = query.gte('fecha_emision', fechaDesde);
+        }
+        if (fechaHasta && fechaHasta.trim() !== '') {
+            // Incluir todo el día final
+            const fechaFin = new Date(fechaHasta);
+            fechaFin.setDate(fechaFin.getDate() + 1);
+            const fechaFinStr = fechaFin.toISOString().split('T')[0];
+            query = query.lt('fecha_emision', fechaFinStr);
+        }
+
+        query = query.order('fecha_emision', { ascending: false });
+
+        const { data: ventas, error } = await query;
+
+        if (error) throw error;
 
         if (!ventas || ventas.length === 0) {
             hideLoading('#btn-generar');
@@ -226,7 +259,7 @@ async function generarEstadoCuenta() {
             };
         });
 
-        // Calcular resumen
+        // Resumen
         const totalFacturado = datosEstado.reduce((sum, v) => sum + v.totalConIVA, 0);
         const totalPagado = datosEstado.reduce((sum, v) => sum + v.totalPagado, 0);
         const saldoTotal = totalFacturado - totalPagado;
@@ -236,7 +269,6 @@ async function generarEstadoCuenta() {
             ? Math.round(notasConMora.reduce((sum, v) => sum + v.diasMora, 0) / notasConMora.length)
             : 0;
 
-        // Mostrar resumen
         document.getElementById('resumen-container').style.display = '';
         document.getElementById('res-total-facturado').textContent = formatUSD(totalFacturado);
         document.getElementById('res-total-pagado').textContent = formatUSD(totalPagado);
@@ -244,7 +276,6 @@ async function generarEstadoCuenta() {
         document.getElementById('res-cantidad-notas').textContent = cantidadNotas;
         document.getElementById('res-dias-mora').textContent = diasMoraPromedio;
 
-        // Mostrar tabla
         renderizarTabla(datosEstado);
         document.getElementById('detalle-container').style.display = '';
 
@@ -355,8 +386,9 @@ function exportarExcel() {
 }
 
 // ============================================
-// EXPORTAR A PDF (con jspdf-autotable)
+// EXPORTAR A PDF (CON MEMBRETE SIMPLIFICADO)
 // ============================================
+
 function exportarPDF() {
     if (!datosEstado || datosEstado.length === 0) {
         showAlert('No hay datos para exportar.', 'warning');
@@ -369,7 +401,7 @@ function exportarPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('l', 'mm', 'a4');
 
-        // ===== MEMBRETE SIMPLIFICADO (sin RIF, teléfono, email) =====
+        // ===== MEMBRETE SIMPLIFICADO =====
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(26, 35, 126);

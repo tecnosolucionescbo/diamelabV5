@@ -1,8 +1,6 @@
 /**
  * Sistema Diamelab - Modulo de Pagos
- * Versión con soporte para IVA, edición de pagos y conversión Bs. a USD
- * CORREGIDO: función toggleValidacionPago maneja modo global sin errores
- * AHORA CON COLUMNA "MONTO (Bs.)" EN EL HISTORIAL
+ * VERSIÓN CORREGIDA - SIN DEPENDENCIA DE getNotasPendientesPorCliente
  */
 
 // Estado global
@@ -45,13 +43,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (pMonto) {
         pMonto.addEventListener('input', function() {
-            console.log('🔁 Evento input en p-monto-bs (principal)');
             calcularEquivalenteUSD('p');
         });
     }
     if (pTasa) {
         pTasa.addEventListener('input', function() {
-            console.log('🔁 Evento input en p-tasa (principal)');
             calcularEquivalenteUSD('p');
         });
     }
@@ -68,13 +64,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (epMonto) {
         epMonto.addEventListener('input', function() {
-            console.log('🔁 Evento input en ep-monto-bs (edición)');
             calcularEquivalenteUSD('ep');
         });
     }
     if (epTasa) {
         epTasa.addEventListener('input', function() {
-            console.log('🔁 Evento input en ep-tasa (edición)');
             calcularEquivalenteUSD('ep');
         });
     }
@@ -113,10 +107,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ============================================
-// FUNCIÓN DE CONFIGURACIÓN DE EVENTOS (CORREGIDA)
+// CONFIGURACIÓN DE EVENTOS
 // ============================================
 function setupEventListenersPagos() {
-    // Select de ventas
     const selectVenta = document.getElementById('select-venta');
     if (selectVenta) {
         selectVenta.addEventListener('change', async (e) => {
@@ -128,7 +121,6 @@ function setupEventListenersPagos() {
         });
     }
 
-    // Búsqueda por A2
     const buscarA2 = document.getElementById('buscar-a2');
     if (buscarA2) {
         buscarA2.addEventListener('keydown', async (e) => {
@@ -141,7 +133,6 @@ function setupEventListenersPagos() {
         btnBuscarVenta.addEventListener('click', buscarPorA2);
     }
 
-    // Búsqueda por cliente
     const buscarCliente = document.getElementById('buscar-cliente-pago');
     if (buscarCliente) {
         buscarCliente.addEventListener('keydown', async (e) => {
@@ -149,7 +140,6 @@ function setupEventListenersPagos() {
         });
     }
 
-    // Guardar y limpiar
     const btnGuardar = document.getElementById('btn-guardar-pago');
     if (btnGuardar) {
         btnGuardar.addEventListener('click', guardarPago);
@@ -160,7 +150,6 @@ function setupEventListenersPagos() {
         btnLimpiar.addEventListener('click', limpiarFormularioPago);
     }
 
-    // Refrescar tasa
     const btnRefresh = document.getElementById('btn-refresh-tasa');
     if (btnRefresh) {
         btnRefresh.addEventListener('click', async () => {
@@ -171,7 +160,6 @@ function setupEventListenersPagos() {
         });
     }
 
-    // Fecha por defecto
     const pFecha = document.getElementById('p-fecha');
     if (pFecha && typeof getTodayISO === 'function') {
         pFecha.value = getTodayISO();
@@ -179,13 +167,10 @@ function setupEventListenersPagos() {
 }
 
 // ============================================
-// FUNCIONES AUXILIARES (faltantes)
+// FUNCIÓN AUXILIAR: calcular saldo de una venta
 // ============================================
-
-// Calcula el saldo de una venta sumando todos sus pagos
 async function calcularSaldoVenta(ventaId) {
     try {
-        // Obtener la venta
         const { data: venta, error: vError } = await supabaseClient
             .from('ventas')
             .select('monto_total_usd, total_con_iva, numero_factura')
@@ -193,7 +178,6 @@ async function calcularSaldoVenta(ventaId) {
             .single();
         if (vError) throw vError;
 
-        // Obtener los pagos de esa venta
         const { data: pagos, error: pError } = await supabaseClient
             .from('pagos')
             .select('monto_pagado_usd')
@@ -212,9 +196,8 @@ async function calcularSaldoVenta(ventaId) {
 }
 
 // ============================================
-// INICIALIZACION
+// ACTUALIZAR AVATAR
 // ============================================
-
 function updateUserAvatarPagos() {
     const user = JSON.parse(localStorage.getItem('diamelab_user') || '{}');
     const avatarEl = document.getElementById('user-avatar');
@@ -225,9 +208,8 @@ function updateUserAvatarPagos() {
 }
 
 // ============================================
-// CARGAR VENTAS
+// CARGAR VENTAS EN SELECT
 // ============================================
-
 async function cargarVentasSelect() {
     try {
         const { data, error } = await supabaseClient
@@ -268,7 +250,6 @@ async function cargarVentasSelect() {
 // ============================================
 // SELECCIONAR VENTA
 // ============================================
-
 async function seleccionarVenta(ventaId) {
     try {
         let venta = ventasCache.find(v => v.id === ventaId);
@@ -363,7 +344,6 @@ function ocultarDetalleVenta() {
 // ============================================
 // BUSCAR VENTAS
 // ============================================
-
 async function buscarPorA2() {
     const a2 = document.getElementById('buscar-a2').value.trim();
     if (!a2) {
@@ -479,12 +459,9 @@ async function buscarPorCliente() {
 }
 
 // ============================================
-// FUNCIONES DE TASA Y EQUIVALENTE
+// TASA Y EQUIVALENTE USD
 // ============================================
-
 async function cargarTasaActual(prefix) {
-    console.log(`🔄 cargarTasaActual('${prefix}')`);
-
     const tasaTopbar = document.querySelector('.tasa-valor');
     let tasa = null;
 
@@ -493,7 +470,6 @@ async function cargarTasaActual(prefix) {
         let match = tasaTexto.match(/(\d{1,3}(?:[.,]\d{4}))/);
         if (match) {
             tasa = parseFloat(match[1].replace('.', '').replace(',', '.'));
-            console.log(`✅ Tasa del topbar: ${tasa}`);
         }
     }
 
@@ -502,33 +478,26 @@ async function cargarTasaActual(prefix) {
             const result = await obtenerTasaBCV();
             if (result && result.tasa) {
                 tasa = result.tasa;
-                console.log(`✅ Tasa de API: ${tasa}`);
             }
         } catch (error) {
-            console.error('❌ Error API:', error);
+            console.error('Error API:', error);
         }
     }
 
     if (!tasa) {
         tasa = 623.02;
-        console.warn(`⚠️ Tasa por defecto: ${tasa}`);
     }
 
     const tasaInput = document.getElementById(prefix + '-tasa');
     if (tasaInput) {
         tasaInput.value = tasa;
         tasaInput.dataset.tasaOriginal = tasa;
-        console.log(`✅ Tasa cargada en ${prefix}-tasa: ${tasa}`);
-    } else {
-        console.error(`❌ No se encontró ${prefix}-tasa`);
     }
 
     calcularEquivalenteUSD(prefix);
 }
 
 function calcularEquivalenteUSD(prefix) {
-    console.log(`🔄 calcularEquivalenteUSD('${prefix}')`);
-
     const montoId = prefix + '-monto-bs';
     const tasaId = prefix + '-tasa';
     const displayId = prefix + '-equivalente-usd-display';
@@ -539,37 +508,18 @@ function calcularEquivalenteUSD(prefix) {
     const displayDiv = document.getElementById(displayId);
     const hiddenInput = document.getElementById(hiddenId);
 
-    if (!montoBsInput) {
-        console.error(`❌ No se encontró #${montoId}`);
-        return;
-    }
-    if (!tasaInput) {
-        console.error(`❌ No se encontró #${tasaId}`);
-        return;
-    }
-    if (!displayDiv) {
-        console.error(`❌ No se encontró #${displayId}`);
-        return;
-    }
-    if (!hiddenInput) {
-        console.error(`❌ No se encontró #${hiddenId}`);
-        return;
-    }
+    if (!montoBsInput || !tasaInput || !displayDiv || !hiddenInput) return;
 
     const montoBs = parseFloat(montoBsInput.value) || 0;
     const tasa = parseFloat(tasaInput.value) || 0;
-
-    console.log(`📊 Monto Bs: ${montoBs}, Tasa: ${tasa}`);
 
     if (montoBs > 0 && tasa > 0) {
         const usd = montoBs / tasa;
         displayDiv.textContent = '$' + usd.toFixed(2);
         hiddenInput.value = usd.toFixed(2);
-        console.log(`✅ USD: $${usd.toFixed(2)}`);
     } else {
         displayDiv.textContent = '$0.00';
         hiddenInput.value = '0';
-        console.log('ℹ️ Equivalente en $0.00');
     }
 }
 
@@ -606,9 +556,8 @@ function manejarCambioFecha(prefix) {
 }
 
 // ============================================
-// GUARDAR PAGO (CREACIÓN) - CORREGIDO
+// GUARDAR PAGO (CORREGIDO - SIN fecha_emision)
 // ============================================
-
 async function guardarPago() {
     try {
         if (!ventaSeleccionada) {
@@ -725,9 +674,8 @@ function limpiarFormularioPago() {
 }
 
 // ============================================
-// RENDERIZAR PAGOS (CON COLUMNA MONTO BS.)
+// RENDERIZAR PAGOS
 // ============================================
-
 function renderizarPagos() {
     const tbody = document.getElementById('tbody-pagos');
 
@@ -783,7 +731,6 @@ function renderizarPagos() {
         if (p.retencion_islr_url) comps.push(`<a href="${p.retencion_islr_url}" target="_blank" style="color: var(--diamelab-primary); font-weight: 500;">ISLR</a>`);
         if (comps.length > 0) comprobantesHtml = comps.join(' | ');
 
-        // === MONTO EN BOLÍVARES ===
         const montoUSD = parseFloat(p.monto_pagado_usd) || 0;
         const tasa = parseFloat(p.tasa_usada) || 0;
         const montoBs = montoUSD * tasa;
@@ -848,7 +795,6 @@ function actualizarResumen() {
 // ============================================
 // EDITAR PAGO
 // ============================================
-
 window.editarPago = async function(pagoId) {
     if (!isAdmin()) {
         showAlert('Solo los administradores pueden editar pagos.', 'error');
@@ -930,7 +876,6 @@ async function guardarEdicionPago() {
 // ============================================
 // ELIMINAR PAGO
 // ============================================
-
 window.eliminarPagoConfirm = async function(pagoId) {
     if (!isAdmin()) {
         showAlert('Solo los administradores pueden eliminar pagos.', 'error');
@@ -960,7 +905,6 @@ window.eliminarPagoConfirm = async function(pagoId) {
 // ============================================
 // TOGGLE VALIDACIÓN
 // ============================================
-
 window.toggleValidacionPago = async function(pagoId, estadoActual) {
     if (!isAdmin()) {
         showAlert('Solo los administradores pueden validar pagos.', 'error');
@@ -994,9 +938,8 @@ window.toggleValidacionPago = async function(pagoId, estadoActual) {
 };
 
 // ============================================
-// PAGOS GLOBALES (CON COLUMNA MONTO BS.)
+// PAGOS GLOBALES
 // ============================================
-
 async function cargarPagosGlobales(filtro) {
     try {
         let validado = undefined;
@@ -1064,7 +1007,6 @@ function renderizarPagosGlobales() {
         if (p.retencion_islr_url) comps.push(`<a href="${p.retencion_islr_url}" target="_blank" style="color: var(--diamelab-primary); font-weight: 500;">ISLR</a>`);
         if (comps.length > 0) comprobantesHtml = comps.join(' | ');
 
-        // === MONTO EN BOLÍVARES ===
         const montoUSD = parseFloat(p.monto_pagado_usd) || 0;
         const tasa = parseFloat(p.tasa_usada) || 0;
         const montoBs = montoUSD * tasa;
@@ -1117,9 +1059,8 @@ function renderizarPagosGlobales() {
 }
 
 // ============================================
-// GUARDAR PAGO SIMPLE (una sola nota)
+// GUARDAR PAGO SIMPLE
 // ============================================
-
 async function guardarPagoSimple(ventaId, montoUSD, fechaPago, metodoPago, tasaUsada, referencia, banco, validado) {
     try {
         showLoading('#btn-guardar-pago', 'Registrando...');
@@ -1158,16 +1099,14 @@ async function guardarPagoSimple(ventaId, montoUSD, fechaPago, metodoPago, tasaU
 }
 
 // ============================================
-// MOSTRAR MODAL DE DISTRIBUCIÓN
+// MODAL DE DISTRIBUCIÓN (sin cambios)
 // ============================================
-
 let distribucionData = null;
 
 async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTotal, notasDisponibles, datosPago) {
     const excedente = montoTotal - saldoPrincipal;
     const modal = document.getElementById('modal-distribucion');
 
-    // Guardar datos para usar al confirmar
     distribucionData = {
         ventaPrincipal,
         saldoPrincipal,
@@ -1178,12 +1117,10 @@ async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTot
         asignaciones: {}
     };
 
-    // Llenar información
     document.getElementById('d-monto-total').textContent = formatUSD(montoTotal);
     document.getElementById('d-saldo-nota').textContent = formatUSD(saldoPrincipal);
     document.getElementById('d-excedente').textContent = formatUSD(excedente);
 
-    // Llenar tabla de notas disponibles
     const tbody = document.getElementById('d-tbody-notas');
     tbody.innerHTML = '';
 
@@ -1218,10 +1155,8 @@ async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTot
         `;
         tbody.appendChild(tr);
 
-        // Inicializar asignación
         distribucionData.asignaciones[nota.id] = index === 0 ? Math.min(excedente, nota.saldo) : 0;
 
-        // Eventos para actualizar el total restante al cambiar monto
         const inputMonto = tr.querySelector('.d-monto-asignar');
         const checkbox = tr.querySelector('.d-check-nota');
         const inputRef = tr.querySelector('.d-referencia');
@@ -1230,7 +1165,6 @@ async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTot
             const ventaId = this.dataset.ventaId;
             const val = parseFloat(this.value) || 0;
             distribucionData.asignaciones[ventaId] = val;
-            // Guardar referencia
             distribucionData.referencias = distribucionData.referencias || {};
             distribucionData.referencias[ventaId] = inputRef.value;
             actualizarExcedenteRestante();
@@ -1254,7 +1188,6 @@ async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTot
             } else {
                 inputMonto.disabled = false;
                 inputRef.disabled = false;
-                // Si el monto es 0, asignar un monto sugerido
                 if (parseFloat(inputMonto.value) === 0) {
                     const excedenteRestante = calcularExcedenteRestante();
                     const nota = notasDisponibles.find(n => n.id === inputMonto.dataset.ventaId);
@@ -1268,19 +1201,14 @@ async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTot
             }
         });
 
-        // Guardar referencia inicial
         distribucionData.referencias = distribucionData.referencias || {};
         distribucionData.referencias[nota.id] = refSugerida;
-
-        // Si el primer checkbox está marcado, deshabilitar el input de referencia si no se quiere editar, pero lo dejamos editable
     });
 
     actualizarExcedenteRestante();
 
-    // Mostrar modal
     modal.style.display = 'flex';
 
-    // Eventos del modal
     document.getElementById('btn-cerrar-distribucion').addEventListener('click', cerrarModalDistribucion);
     document.getElementById('btn-cancelar-distribucion').addEventListener('click', cerrarModalDistribucion);
     document.getElementById('btn-confirmar-distribucion').addEventListener('click', confirmarDistribucion);
@@ -1311,7 +1239,6 @@ async function confirmarDistribucion() {
 
     const { ventaPrincipal, saldoPrincipal, montoTotal, notasDisponibles, datosPago, asignaciones, referencias } = distribucionData;
 
-    // Validar que el excedente esté completamente asignado
     const excedente = montoTotal - saldoPrincipal;
     const totalAsignado = Object.values(asignaciones).reduce((sum, v) => sum + v, 0);
     const diferencia = excedente - totalAsignado;
@@ -1321,10 +1248,8 @@ async function confirmarDistribucion() {
         return;
     }
 
-    // Filtrar notas con monto > 0
     const notasSeleccionadas = notasDisponibles.filter(n => asignaciones[n.id] > 0.01);
 
-    // Confirmar con el usuario
     let mensaje = `Se distribuirá el pago de ${formatUSD(montoTotal)} de la siguiente manera:\n`;
     mensaje += `- Nota ${ventaPrincipal.correlacion_a2}: ${formatUSD(saldoPrincipal)}\n`;
     notasSeleccionadas.forEach(n => {
@@ -1343,10 +1268,8 @@ async function confirmarDistribucion() {
         const retIVAFile = document.getElementById('p-ret-iva').files[0] || null;
         const retISLRFile = document.getElementById('p-ret-islr').files[0] || null;
 
-        // Construir lista de pagos a crear
         const pagosData = [];
 
-        // Pago principal (saldo de la nota seleccionada)
         if (saldoPrincipal > 0.01) {
             const refPrincipal = datosPago.referenciaOriginal || 'PAGO';
             pagosData.push({
@@ -1362,7 +1285,6 @@ async function confirmarDistribucion() {
             });
         }
 
-        // Pagos para las notas seleccionadas
         for (const nota of notasSeleccionadas) {
             const monto = asignaciones[nota.id] || 0;
             const ref = referencias[nota.id] || `${datosPago.referenciaOriginal || 'PAGO'}-${notasSeleccionadas.indexOf(nota) + 1}`;
@@ -1381,7 +1303,6 @@ async function confirmarDistribucion() {
             }
         }
 
-        // Crear todos los pagos con los mismos archivos adjuntos
         await createPagosMultiples(pagosData, comprobanteFile, retIVAFile, retISLRFile);
 
         hideLoading('#btn-confirmar-distribucion');

@@ -284,9 +284,18 @@ function obtenerFiltros() {
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const facturado = document.getElementById('filtro-facturado').value;
 
-    // === LIMPIAR BÚSQUEDA: solo normalizar espacios, NO eliminar comas ni puntos ===
     let busqueda = document.getElementById('filtro-busqueda').value.trim();
-    busqueda = busqueda.replace(/\s+/g, ' '); // múltiples espacios a uno
+
+    // === NUEVA LÓGICA: TOMAR LA PARTE ANTES DE LA PRIMERA COMA ===
+    if (busqueda.includes(',')) {
+        busqueda = busqueda.split(',')[0].trim();
+    } else if (busqueda.includes(';')) {
+        busqueda = busqueda.split(';')[0].trim();
+    }
+    // Eliminar punto final si existe
+    busqueda = busqueda.replace(/\.$/, '');
+    // Normalizar espacios múltiples
+    busqueda = busqueda.replace(/\s+/g, ' ');
 
     const filtros = {};
     if (estado) filtros.estado = estado;

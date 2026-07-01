@@ -1,9 +1,28 @@
 /**
  * Módulo de Estado de Cuenta por Cliente
+ * VERSIÓN CORREGIDA:
+ * - Buscador inteligente de clientes (autocompletado)
+ * - PDF con jspdf-autotable (sin errores de html2canvas)
+ * - Filtro de fechas corregido
+ * - Cálculo de días de mora solo para notas vencidas
  */
 
 let clientesCache = [];
 let datosEstado = [];
+let clienteSeleccionado = null;
+
+// Debounce para el buscador
+const debounce = (func, wait) => {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = await protectRoute();
@@ -14,7 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await actualizarDisplayTasa('#tasa-bcv');
 
-    // Cargar lista de clientes
+    // Cargar clientes en caché
     await cargarClientes();
 
     // Eventos
@@ -26,10 +45,72 @@ document.addEventListener('DOMContentLoaded', async () => {
         await actualizarDisplayTasa('#tasa-bcv');
     });
 
-    // Evento de tecla Enter en el selector de cliente
-    document.getElementById('select-cliente').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') generarEstadoCuenta();
+    // Buscador de clientes con debounce
+    const inputBusqueda = document.getElementById('cliente-busqueda');
+    const resultados = document.getElementById('resultados-clientes');
+
+    inputBusqueda.addEventListener('input', debounce(async (e) => {
+        const query = e.target.value.trim();
+        if (query.length < 2) {
+            resultados.style.display = 'none';
+            return;
+        }
+        const filtrados = clientesCache.filter(c =>
+            c.razon_social.toLowerCase().includes(query.toLowerCase()) ||
+            c.rif.toLowerCase().includes(query.toLowerCase())
+        ).slice(0, 15); // limitar a 15 resultados
+
+        if (filtrados.length === 0) {
+            resultados.innerHTML = '<div class="item" style="color:var(--gray-400);">No se encontraron clientes</div>';
+            resultados.style.display = 'block';
+            return;
+        }
+
+        resultados.innerHTML = filtrados.map(c => `
+            <div class="item" data-id="${c.id}" data-nombre="${c.razon_social}" data-rif="${c.rif}">
+                <strong>${c.razon_social}</strong>
+                <div class="rif">${c.rif}</div>
+            </div>
+        `).join('');
+        resultados.style.display = 'block';
+
+        // Asignar eventos a los items
+        resultados.querySelectorAll('.item').forEach(el => {
+            el.addEventListener('click', () => {
+                const id = el.dataset.id;
+                const nombre = el.dataset.nombre;
+                const rif = el.dataset.rif;
+                inputBusqueda.value = nombre + ' (' + rif + ')';
+                document.getElementById('cliente-seleccionado').value = id;
+                clienteSeleccionado = clientesCache.find(c => c.id === id);
+                resultados.style.display = 'none';
+                // Opcional: generar automáticamente
+            });
+        });
+    }, 300));
+
+    // Cerrar resultados al hacer click fuera
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.cliente-busqueda-container')) {
+            resultados.style.display = 'none';
+        }
     });
+
+    // Enter en el buscador
+    inputBusqueda.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const primerResultado = resultados.querySelector('.item');
+            if (primerResultado) {
+                primerResultado.click();
+            }
+        }
+    });
+
+    // Establecer fechas por defecto (primer día del mes hasta hoy)
+    const hoy = new Date();
+    const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('fecha-desde').value = primerDia.toISOString().split('T')[0];
+    document.getElementById('fecha-hasta').value = hoy.toISOString().split('T')[0];
 });
 
 // ============================================
@@ -38,11 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function cargarClientes() {
     try {
-        const data = await getClientes();
-        clientesCache = data;
-        const select = document.getElementById('select-cliente');
-        select.innerHTML = '<option value="">Seleccione un cliente...</option>' +
-            data.map(c => `<option value="${c.id}">${c.razon_social} (${c.rif})</option>`).join('');
+        clientesCache = await getClientes();
     } catch (error) {
         console.error('Error cargando clientes:', error);
         showAlert('Error al cargar clientes', 'error');
@@ -54,17 +131,20 @@ async function cargarClientes() {
 // ============================================
 
 async function generarEstadoCuenta() {
-    const clienteId = document.getElementById('select-cliente').value;
+    const clienteId = document.getElementById('cliente-seleccionado').value;
     const fechaDesde = document.getElementById('fecha-desde').value;
     const fechaHasta = document.getElementById('fecha-hasta').value;
 
     if (!clienteId) {
-        showAlert('Seleccione un cliente.', 'warning');
+        showAlert('Seleccione un cliente de la lista de búsqueda.', 'warning');
         return;
     }
 
     try {
         showLoading('#btn-generar', 'Generando...');
+
+        // Obtener el cliente seleccionado
+        clienteSeleccionado = clientesCache.find(c => c.id === clienteId);
 
         // Obtener ventas del cliente con pagos
         const filtros = { cliente_id: clienteId };
@@ -81,9 +161,6 @@ async function generarEstadoCuenta() {
             return;
         }
 
-        // Obtener el cliente para mostrar su nombre en el reporte
-        const cliente = clientesCache.find(c => c.id === clienteId);
-
         // Procesar datos
         datosEstado = ventas.map(v => {
             const pagos = v.pagos || [];
@@ -93,11 +170,13 @@ async function generarEstadoCuenta() {
             const totalConIVA = parseFloat(v.total_con_iva) || montoBase;
             const saldo = totalConIVA - totalPagado;
 
-            // Días de mora (solo si saldo > 0 y vencimiento pasado)
+            // Días de mora: solo si saldo > 0 y la fecha de vencimiento es anterior a hoy
             let diasMora = 0;
             if (saldo > 0.01) {
                 const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
                 const vencimiento = new Date(v.fecha_vencimiento);
+                vencimiento.setHours(0, 0, 0, 0);
                 if (vencimiento < hoy) {
                     const diff = hoy - vencimiento;
                     diasMora = Math.ceil(diff / (1000 * 60 * 60 * 24));
@@ -112,7 +191,7 @@ async function generarEstadoCuenta() {
                 totalPagado,
                 saldo,
                 diasMora,
-                cliente: cliente
+                cliente: clienteSeleccionado
             };
         });
 
@@ -193,7 +272,7 @@ function renderizarTabla(datos) {
 }
 
 // ============================================
-// EXPORTAR A EXCEL
+// EXPORTAR A EXCEL (sin cambios)
 // ============================================
 
 function exportarExcel() {
@@ -202,7 +281,6 @@ function exportarExcel() {
         return;
     }
 
-    // Preparar datos para Excel
     const excelData = datosEstado.map(v => ({
         'Nº Nota': v.correlacion_a2 || '',
         'Fecha Emisión': formatDate(v.fecha_emision),
@@ -221,9 +299,8 @@ function exportarExcel() {
     const ws = XLSX.utils.json_to_sheet(excelData);
     XLSX.utils.book_append_sheet(wb, ws, 'EstadoCuenta');
 
-    // Agregar una hoja de resumen
     const resumenData = [
-        { 'Concepto': 'Cliente', 'Valor': datosEstado[0]?.cliente?.razon_social || '' },
+        { 'Concepto': 'Cliente', 'Valor': clienteSeleccionado?.razon_social || '' },
         { 'Concepto': 'Total Facturado', 'Valor': document.getElementById('res-total-facturado').textContent },
         { 'Concepto': 'Total Pagado', 'Valor': document.getElementById('res-total-pagado').textContent },
         { 'Concepto': 'Saldo Pendiente', 'Valor': document.getElementById('res-saldo-pendiente').textContent },
@@ -238,7 +315,7 @@ function exportarExcel() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const clienteNombre = datosEstado[0]?.cliente?.razon_social?.replace(/\s/g, '_') || 'cliente';
+    const clienteNombre = clienteSeleccionado?.razon_social?.replace(/\s/g, '_') || 'cliente';
     a.download = `estado_cuenta_${clienteNombre}_${new Date().toISOString().slice(0,10)}.xlsx`;
     document.body.appendChild(a);
     a.click();
@@ -247,7 +324,7 @@ function exportarExcel() {
 }
 
 // ============================================
-// EXPORTAR A PDF
+// EXPORTAR A PDF (con jspdf-autotable - CORREGIDO)
 // ============================================
 
 function exportarPDF() {
@@ -256,95 +333,51 @@ function exportarPDF() {
         return;
     }
 
-    // Capturar la tabla y resumen con html2canvas
-    const contenedor = document.createElement('div');
-    contenedor.style.padding = '20px';
-    contenedor.style.fontFamily = 'Arial, sans-serif';
-    contenedor.style.background = '#fff';
-    contenedor.style.width = '100%';
+    showLoading('#btn-exportar-pdf', 'Generando PDF...');
 
-    // Encabezado
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.marginBottom = '20px';
-    header.style.borderBottom = '2px solid #1a237e';
-    header.style.paddingBottom = '10px';
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', 'a4'); // landscape
 
-    const titulo = document.createElement('h1');
-    titulo.textContent = 'Estado de Cuenta';
-    titulo.style.color = '#1a237e';
-    titulo.style.margin = '0';
-    header.appendChild(titulo);
+        // Configurar fuente y estilos
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Estado de Cuenta', 14, 22);
 
-    const clienteInfo = document.createElement('div');
-    clienteInfo.innerHTML = `<strong>Cliente:</strong> ${datosEstado[0]?.cliente?.razon_social || ''}`;
-    clienteInfo.style.fontSize = '16px';
-    header.appendChild(clienteInfo);
+        // Datos del cliente
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        const cliente = clienteSeleccionado || {};
+        doc.text(`Cliente: ${cliente.razon_social || ''}`, 14, 30);
+        doc.text(`RIF: ${cliente.rif || ''}`, 14, 36);
 
-    contenedor.appendChild(header);
+        // Resumen (en una línea horizontal)
+        const resumenY = 44;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        const resumenItems = [
+            { label: 'Total Facturado', value: document.getElementById('res-total-facturado').textContent, color: [26, 35, 126] },
+            { label: 'Total Pagado', value: document.getElementById('res-total-pagado').textContent, color: [34, 197, 94] },
+            { label: 'Saldo Pendiente', value: document.getElementById('res-saldo-pendiente').textContent, color: [239, 68, 68] },
+            { label: 'Cantidad Notas', value: document.getElementById('res-cantidad-notas').textContent, color: [59, 130, 246] },
+            { label: 'Días de Mora', value: document.getElementById('res-dias-mora').textContent, color: [245, 158, 11] },
+        ];
 
-    // Resumen
-    const resumenDiv = document.createElement('div');
-    resumenDiv.style.display = 'grid';
-    resumenDiv.style.gridTemplateColumns = 'repeat(5, 1fr)';
-    resumenDiv.style.gap = '10px';
-    resumenDiv.style.marginBottom = '20px';
-    resumenDiv.style.background = '#f9fafb';
-    resumenDiv.style.padding = '15px';
-    resumenDiv.style.borderRadius = '8px';
-    resumenDiv.style.borderLeft = '4px solid #1a237e';
+        let xPos = 14;
+        resumenItems.forEach(item => {
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100);
+            doc.text(item.label, xPos, resumenY);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(item.color[0], item.color[1], item.color[2]);
+            doc.text(item.value, xPos, resumenY + 5);
+            xPos += 38;
+        });
+        doc.setTextColor(0);
 
-    const itemsResumen = [
-        { label: 'Total Facturado', value: document.getElementById('res-total-facturado').textContent, color: '#1a237e' },
-        { label: 'Total Pagado', value: document.getElementById('res-total-pagado').textContent, color: '#22c55e' },
-        { label: 'Saldo Pendiente', value: document.getElementById('res-saldo-pendiente').textContent, color: '#ef4444' },
-        { label: 'Cantidad Notas', value: document.getElementById('res-cantidad-notas').textContent, color: '#3b82f6' },
-        { label: 'Días de Mora', value: document.getElementById('res-dias-mora').textContent, color: '#f59e0b' },
-    ];
-    itemsResumen.forEach(item => {
-        const card = document.createElement('div');
-        card.style.textAlign = 'center';
-        card.innerHTML = `
-            <div style="font-size: 20px; font-weight: 700; color: ${item.color};">${item.value}</div>
-            <div style="font-size: 12px; color: #6b7280;">${item.label}</div>
-        `;
-        resumenDiv.appendChild(card);
-    });
-    contenedor.appendChild(resumenDiv);
-
-    // Tabla
-    const tableContainer = document.createElement('div');
-    tableContainer.style.overflowX = 'auto';
-    const table = document.createElement('table');
-    table.style.width = '100%';
-    table.style.borderCollapse = 'collapse';
-    table.style.fontSize = '12px';
-
-    // Cabecera
-    const thead = document.createElement('thead');
-    thead.style.background = '#1a237e';
-    thead.style.color = '#fff';
-    const headerRow = document.createElement('tr');
-    const headers = ['Nº Nota', 'Fecha Emisión', 'Vencimiento', 'Base', 'IVA', 'Total', 'Estado', 'Factura', 'Pagado', 'Saldo', 'Mora'];
-    headers.forEach(h => {
-        const th = document.createElement('th');
-        th.textContent = h;
-        th.style.padding = '8px 10px';
-        th.style.textAlign = 'left';
-        th.style.border = '1px solid #1a237e';
-        headerRow.appendChild(th);
-    });
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-
-    // Cuerpo
-    const tbody = document.createElement('tbody');
-    datosEstado.forEach(v => {
-        const tr = document.createElement('tr');
-        tr.style.borderBottom = '1px solid #e5e7eb';
-        const cells = [
+        // Tabla de notas
+        const tableColumn = ['Nº Nota', 'Fecha Emisión', 'Vencimiento', 'Base', 'IVA', 'Total', 'Estado', 'Factura', 'Pagado', 'Saldo', 'Mora'];
+        const tableRows = datosEstado.map(v => [
             v.correlacion_a2 || '',
             formatDate(v.fecha_emision),
             formatDate(v.fecha_vencimiento),
@@ -356,69 +389,49 @@ function exportarPDF() {
             formatUSD(v.totalPagado),
             formatUSD(v.saldo),
             v.diasMora > 0 ? `${v.diasMora} días` : 'Sin mora'
-        ];
-        cells.forEach((text, i) => {
-            const td = document.createElement('td');
-            td.textContent = text;
-            td.style.padding = '6px 10px';
-            td.style.border = '1px solid #e5e7eb';
-            if (i === 5) td.style.fontWeight = 'bold';
-            if (i === 9) td.style.color = v.saldo > 0.01 ? '#ef4444' : '#22c55e';
-            tr.appendChild(td);
+        ]);
+
+        doc.autoTable({
+            startY: 52,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'striped',
+            headStyles: { fillColor: [26, 35, 126], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 7 },
+            columnStyles: {
+                0: { cellWidth: 22 },
+                1: { cellWidth: 20 },
+                2: { cellWidth: 20 },
+                3: { cellWidth: 18 },
+                4: { cellWidth: 15 },
+                5: { cellWidth: 18 },
+                6: { cellWidth: 18 },
+                7: { cellWidth: 18 },
+                8: { cellWidth: 18 },
+                9: { cellWidth: 18 },
+                10: { cellWidth: 18 }
+            },
+            margin: { left: 14, right: 14 }
         });
-        tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    tableContainer.appendChild(table);
-    contenedor.appendChild(tableContainer);
 
-    // Pie de página
-    const footer = document.createElement('div');
-    footer.style.marginTop = '20px';
-    footer.style.textAlign = 'center';
-    footer.style.fontSize = '10px';
-    footer.style.color = '#9ca3af';
-    footer.textContent = `Generado el ${new Date().toLocaleString('es-VE')} - Diamelab, C.A.`;
-    contenedor.appendChild(footer);
-
-    // Usar html2canvas para generar la imagen y luego PDF
-    showLoading('#btn-exportar-pdf', 'Generando PDF...');
-
-    html2canvas(contenedor, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-    }).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-        let heightLeft = pdfHeight;
-        let position = 0;
-
-        // Añadir la primera página
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pdf.internal.pageSize.getHeight();
-
-        // Si hay más contenido, añadir páginas adicionales
-        while (heightLeft > 0) {
-            position = heightLeft - pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-            heightLeft -= pdf.internal.pageSize.getHeight();
+        // Pie de página
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(7);
+            doc.setTextColor(150);
+            doc.text(`Generado el ${new Date().toLocaleString('es-VE')} - Diamelab, C.A.`, 14, doc.internal.pageSize.height - 10);
         }
 
-        const clienteNombre = datosEstado[0]?.cliente?.razon_social?.replace(/\s/g, '_') || 'cliente';
-        pdf.save(`estado_cuenta_${clienteNombre}_${new Date().toISOString().slice(0,10)}.pdf`);
+        const clienteNombre = clienteSeleccionado?.razon_social?.replace(/\s/g, '_') || 'cliente';
+        doc.save(`estado_cuenta_${clienteNombre}_${new Date().toISOString().slice(0,10)}.pdf`);
 
         hideLoading('#btn-exportar-pdf');
         showAlert('PDF generado correctamente.', 'success');
-    }).catch(error => {
+
+    } catch (error) {
         hideLoading('#btn-exportar-pdf');
         console.error('Error generando PDF:', error);
         showAlert('Error al generar el PDF: ' + error.message, 'error');
-    });
+    }
 }

@@ -357,7 +357,6 @@ function exportarExcel() {
 // ============================================
 // EXPORTAR A PDF (con jspdf-autotable)
 // ============================================
-
 function exportarPDF() {
     if (!datosEstado || datosEstado.length === 0) {
         showAlert('No hay datos para exportar.', 'warning');
@@ -370,17 +369,58 @@ function exportarPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('l', 'mm', 'a4');
 
+        // ===== MEMBRETE =====
+        const empresa = {
+            nombre: 'Diamelab, C.A.',
+            rif: 'J-XXXXXXXX-X',
+            direccion: 'Av. Principal, Edif. Diamelab, Ciudad Guayana',
+            telefono: '0286-XXXXXXX',
+            email: 'ventas@diamelab.com',
+            slogan: 'Equipos e Insumos para Laboratorios Clínicos'
+        };
+
+        // Logo (si existe)
+        // try { doc.addImage('assets/logo-diamelab.jpg', 'JPEG', 14, 10, 25, 25); } catch(e) {}
+
+        // Título de la empresa
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
-        doc.text('Estado de Cuenta', 14, 22);
+        doc.setTextColor(26, 35, 126);
+        doc.text(empresa.nombre, 14, 22);
 
-        doc.setFontSize(11);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100);
+        doc.text(empresa.slogan, 14, 28);
+
+        doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        const cliente = clienteSeleccionado || {};
-        doc.text(`Cliente: ${cliente.razon_social || ''}`, 14, 30);
-        doc.text(`RIF: ${cliente.rif || ''}`, 14, 36);
+        doc.setTextColor(80);
+        const contactoY = 20;
+        doc.text(`RIF: ${empresa.rif}`, 250, contactoY, { align: 'right' });
+        doc.text(`Tel: ${empresa.telefono}`, 250, contactoY + 5, { align: 'right' });
+        doc.text(`Email: ${empresa.email}`, 250, contactoY + 10, { align: 'right' });
 
-        const resumenY = 44;
+        doc.setDrawColor(26, 35, 126);
+        doc.setLineWidth(0.5);
+        doc.line(14, 32, 284, 32);
+
+        // Título
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0);
+        doc.text('ESTADO DE CUENTA', 14, 40);
+
+        // Datos del cliente
+        const cliente = clienteSeleccionado || {};
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60);
+        doc.text(`Cliente: ${cliente.razon_social || ''}`, 14, 46);
+        doc.text(`RIF: ${cliente.rif || ''}`, 14, 52);
+
+        // Resumen
+        const resumenY = 60;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         const resumenItems = [
@@ -399,10 +439,11 @@ function exportarPDF() {
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(item.color[0], item.color[1], item.color[2]);
             doc.text(item.value, xPos, resumenY + 5);
-            xPos += 38;
+            xPos += 45;
         });
         doc.setTextColor(0);
 
+        // Tabla
         const tableColumn = ['Nº Nota', 'Fecha Emisión', 'Vencimiento', 'Base', 'IVA', 'Total', 'Estado', 'Factura', 'Pagado', 'Saldo', 'Mora'];
         const tableRows = datosEstado.map(v => [
             v.correlacion_a2 || '',
@@ -419,7 +460,7 @@ function exportarPDF() {
         ]);
 
         doc.autoTable({
-            startY: 52,
+            startY: 70,
             head: [tableColumn],
             body: tableRows,
             theme: 'striped',
@@ -441,12 +482,14 @@ function exportarPDF() {
             margin: { left: 14, right: 14 }
         });
 
+        // Pie
         const pageCount = doc.internal.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
             doc.setFontSize(7);
             doc.setTextColor(150);
             doc.text(`Generado el ${new Date().toLocaleString('es-VE')} - Diamelab, C.A.`, 14, doc.internal.pageSize.height - 10);
+            doc.text(`Página ${i} de ${pageCount}`, 270, doc.internal.pageSize.height - 10, { align: 'right' });
         }
 
         const clienteNombre = clienteSeleccionado?.razon_social?.replace(/\s/g, '_') || 'cliente';

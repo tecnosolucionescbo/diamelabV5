@@ -972,7 +972,9 @@ async function createPagosMultiples(pagosData, comprobanteFile = null, retIVAFil
 
     return resultados;
 }
-
+window.getNotasPendientesPorCliente = getNotasPendientesPorCliente;
+window.calcularSaldoVenta = calcularSaldoVenta;
+window.createPagosMultiples = createPagosMultiples;
 // Exportar
 window.getNotasPendientesPorCliente = getNotasPendientesPorCliente;
 window.calcularSaldoVenta = calcularSaldoVenta;

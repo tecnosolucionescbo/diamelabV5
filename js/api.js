@@ -717,10 +717,12 @@ async function getDashboardStats() {
     };
 
     ventas.forEach(v => {
-        // Si está facturada, usar total_con_iva; si no, usar monto_total_usd
-        const tieneFactura = v.numero_factura && v.numero_factura.trim() !== '';
-        const monto = tieneFactura ? (parseFloat(v.total_con_iva) || parseFloat(v.monto_total_usd)) : parseFloat(v.monto_total_usd);
-        stats.totalVentas += monto;
+        // NO sumar las anuladas al total de ventas
+        if (v.estado !== 'anulada') {
+            const tieneFactura = v.numero_factura && v.numero_factura.trim() !== '';
+            const monto = tieneFactura ? (parseFloat(v.total_con_iva) || parseFloat(v.monto_total_usd)) : parseFloat(v.monto_total_usd);
+            stats.totalVentas += monto;
+        }
 
         if (v.estado === 'pendiente') stats.ventasPendientes++;
         if (v.estado === 'pagada') stats.ventasPagadas++;

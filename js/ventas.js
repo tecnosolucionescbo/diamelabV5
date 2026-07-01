@@ -1115,3 +1115,4 @@ window.irEstadoCuenta = function(clienteId) {
     }
     window.location.href = `estado-cuenta.html?cliente=${clienteId}`;
 };
+

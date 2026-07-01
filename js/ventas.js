@@ -1,7 +1,7 @@
 /**
  * Sistema Diamelab - Modulo de Ventas (Notas de Entrega)
  * CRUD completo con items opcionales, filtros, gestión de clientes y FACTURACIÓN
- * BÚSQUEDA MEJORADA: no elimina comas ni puntos
+ * BÚSQUEDA MEJORADA Y CARGA AUTOMÁTICA DE TASA BCV EN NUEVA NOTA
  */
 
 // Estado global
@@ -139,6 +139,10 @@ function setupEventListeners() {
         invalidateTasaCache();
         showAlert('Actualizando tasa BCV...', 'info');
         await actualizarDisplayTasa('#tasa-bcv');
+        // Si el modal de nueva venta está abierto, actualizar la tasa
+        if (document.getElementById('modal-venta').style.display === 'flex') {
+            cargarTasaActualEnModal();
+        }
     });
 
     // Cerrar modales al hacer click fuera
@@ -154,18 +158,6 @@ function setupEventListeners() {
     document.getElementById('modal-facturacion').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) cerrarModalFacturacion();
     });
-}
-
-// ============================================
-// CONFIGURAR EVENTOS DE FACTURACIÓN
-// ============================================
-
-function setupFacturacionListeners() {
-    document.getElementById('btn-cerrar-facturacion').addEventListener('click', cerrarModalFacturacion);
-    document.getElementById('btn-cancelar-facturacion').addEventListener('click', cerrarModalFacturacion);
-    document.getElementById('btn-guardar-facturacion').addEventListener('click', guardarFacturacion);
-    document.getElementById('btn-quitar-facturacion').addEventListener('click', quitarFacturacion);
-    document.getElementById('btn-calcular-iva').addEventListener('click', calcularIVA);
 }
 
 // ============================================
@@ -284,17 +276,14 @@ function obtenerFiltros() {
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const facturado = document.getElementById('filtro-facturado').value;
 
+    // === LIMPIAR BÚSQUEDA ===
     let busqueda = document.getElementById('filtro-busqueda').value.trim();
-
-    // === NUEVA LÓGICA: TOMAR LA PARTE ANTES DE LA PRIMERA COMA ===
     if (busqueda.includes(',')) {
         busqueda = busqueda.split(',')[0].trim();
     } else if (busqueda.includes(';')) {
         busqueda = busqueda.split(';')[0].trim();
     }
-    // Eliminar punto final si existe
     busqueda = busqueda.replace(/\.$/, '');
-    // Normalizar espacios múltiples
     busqueda = busqueda.replace(/\s+/g, ' ');
 
     const filtros = {};
@@ -434,7 +423,50 @@ function limpiarFiltros() {
 }
 
 // ============================================
-// MODAL VENTA - CREAR/EDITAR
+// CARGAR TASA ACTUAL EN EL MODAL DE NUEVA VENTA
+// ============================================
+
+async function cargarTasaActualEnModal() {
+    const tasaInput = document.getElementById('v-tasa-bcv');
+    if (!tasaInput) return;
+
+    // Intentar obtener la tasa del topbar
+    const tasaTopbar = document.querySelector('.tasa-valor');
+    let tasa = null;
+
+    if (tasaTopbar) {
+        let tasaTexto = tasaTopbar.textContent.trim();
+        let match = tasaTexto.match(/(\d{1,3}(?:[.,]\d{4}))/);
+        if (match) {
+            tasa = parseFloat(match[1].replace('.', '').replace(',', '.'));
+        }
+    }
+
+    // Si no se pudo obtener del topbar, consultar API
+    if (!tasa) {
+        try {
+            const result = await obtenerTasaBCV();
+            if (result && result.tasa) {
+                tasa = result.tasa;
+            }
+        } catch (error) {
+            console.error('Error obteniendo tasa:', error);
+        }
+    }
+
+    // Si aún no hay tasa, usar valor por defecto
+    if (!tasa) {
+        tasa = 623.02;
+    }
+
+    // Asignar la tasa al input con 4 decimales
+    tasaInput.value = tasa.toFixed(4);
+    // Actualizar equivalencia en Bs. si hay monto
+    actualizarEquivalenciaBs();
+}
+
+// ============================================
+// MODAL VENTA - CREAR/EDITAR (CON CARGA DE TASA)
 // ============================================
 
 function abrirModalNuevaVenta() {
@@ -451,6 +483,10 @@ function abrirModalNuevaVenta() {
     document.getElementById('v-monto-bs').value = '';
 
     setupSedeUsuario();
+
+    // CARGAR TASA AUTOMÁTICAMENTE
+    cargarTasaActualEnModal();
+
     document.getElementById('modal-venta').style.display = 'flex';
 }
 

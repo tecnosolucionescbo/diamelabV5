@@ -352,6 +352,7 @@ function generarFilaVenta(v) {
                 ${tieneFactura ? `<br><small style="font-size:0.7rem;">Factura: ${v.numero_factura}</small>` : ''}
             </td>
             <td>
+                <button class="btn btn-sm btn-ghost" onclick="irEstadoCuenta('${v.cliente_id}')" title="Ver Estado de Cuenta del cliente" style="color:var(--diamelab-accent);">📊</button>
                 <button class="btn btn-sm btn-ghost" onclick="verVenta('${v.id}')" title="Ver detalle">👁️</button>
                 <button class="btn btn-sm btn-ghost" onclick="imprimirOrden('${v.id}')" title="Imprimir orden" style="color:var(--diamelab-primary);">🖨️</button>
                 <button class="btn btn-sm btn-ghost" onclick="abrirModalFacturacion('${v.id}')" title="Gestionar facturación" style="color:${tieneFactura ? 'var(--success)' : 'var(--warning)'};">🧾</button>
@@ -1081,3 +1082,15 @@ async function guardarCliente() {
         }
     }
 }
+
+// ============================================
+// IR A ESTADO DE CUENTA DEL CLIENTE
+// ============================================
+
+window.irEstadoCuenta = function(clienteId) {
+    if (!clienteId) {
+        showAlert('No se puede identificar el cliente.', 'warning');
+        return;
+    }
+    window.location.href = `estado-cuenta.html?cliente=${clienteId}`;
+};

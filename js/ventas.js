@@ -1,6 +1,7 @@
 /**
  * Sistema Diamelab - Modulo de Ventas (Notas de Entrega)
  * CRUD completo con items opcionales, filtros, gestión de clientes y FACTURACIÓN
+ * BÚSQUEDA MEJORADA: no elimina comas ni puntos
  */
 
 // Estado global
@@ -273,7 +274,7 @@ async function cargarVentas(reiniciar = true) {
 }
 
 // ============================================
-// OBTENER FILTROS (CON LIMPIEZA DE BÚSQUEDA)
+// OBTENER FILTROS (MEJORADO)
 // ============================================
 
 function obtenerFiltros() {
@@ -283,10 +284,9 @@ function obtenerFiltros() {
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const facturado = document.getElementById('filtro-facturado').value;
 
-    // === LIMPIAR BÚSQUEDA ===
+    // === LIMPIAR BÚSQUEDA: solo normalizar espacios, NO eliminar comas ni puntos ===
     let busqueda = document.getElementById('filtro-busqueda').value.trim();
     busqueda = busqueda.replace(/\s+/g, ' '); // múltiples espacios a uno
-    busqueda = busqueda.replace(/[,.;:]/g, ''); // eliminar comas, puntos, etc.
 
     const filtros = {};
     if (estado) filtros.estado = estado;

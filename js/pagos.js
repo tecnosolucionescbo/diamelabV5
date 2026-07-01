@@ -1115,7 +1115,7 @@ async function guardarPagoSimple(ventaId, montoUSD, fechaPago, metodoPago, tasaU
 // MODAL DE DISTRIBUCIÓN (AUTOCONTENIDO - CREA EL MODAL SI NO EXISTE)
 // ============================================
 async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTotal, notasDisponibles, datosPago) {
-    // Verificar si el modal existe, si no, crearlo
+    // 1. Asegurar que el modal existe (si no, lo creamos)
     let modal = document.getElementById('modal-distribucion');
     if (!modal) {
         modal = document.createElement('div');
@@ -1174,14 +1174,33 @@ async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTot
             </div>
         `;
         document.body.appendChild(modal);
+    }
 
-        // Asignar eventos a los botones del modal
-        modal.querySelector('#btn-cerrar-distribucion').addEventListener('click', cerrarModalDistribucion);
-        modal.querySelector('#btn-cancelar-distribucion').addEventListener('click', cerrarModalDistribucion);
-        modal.querySelector('#btn-confirmar-distribucion').addEventListener('click', confirmarDistribucion);
+    // 2. Asignar (o reasignar) eventos a los botones del modal
+    // Eliminar eventos anteriores para evitar duplicados
+    const cerrarBtn = document.getElementById('btn-cerrar-distribucion');
+    const cancelarBtn = document.getElementById('btn-cancelar-distribucion');
+    const confirmarBtn = document.getElementById('btn-confirmar-distribucion');
+
+    // Remover event listeners antiguos (si existen) clonando y reemplazando
+    // o usando una bandera. Usaremos la técnica de reemplazar el botón por su clon.
+    // Pero es más simple: usar una función manejadora que se asigne una sola vez.
+    // Para evitar duplicados, usamos una variable global que indique si ya se asignaron.
+    if (!window._distribucionEventosAsignados) {
+        if (cerrarBtn) {
+            cerrarBtn.addEventListener('click', cerrarModalDistribucion);
+        }
+        if (cancelarBtn) {
+            cancelarBtn.addEventListener('click', cerrarModalDistribucion);
+        }
+        if (confirmarBtn) {
+            confirmarBtn.addEventListener('click', confirmarDistribucion);
+        }
+        // Cerrar al hacer clic fuera del modal
         modal.addEventListener('click', (e) => {
             if (e.target === modal) cerrarModalDistribucion();
         });
+        window._distribucionEventosAsignados = true;
     }
 
     // Ahora los elementos existen, proceder con la lógica

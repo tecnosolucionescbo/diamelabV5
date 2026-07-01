@@ -39,6 +39,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         console.log('✅ Dashboard completamente cargado');
 
+        // ===== FAB: Estado de Cuenta Rápido =====
+        await configurarFAB();
+
     } catch (error) {
         console.error('❌ Error en el dashboard:', error);
         showAlert('Error al cargar el dashboard: ' + error.message, 'error');
@@ -59,14 +62,16 @@ function updateUserAvatar() {
     }
 }
 
+// ============================================
+// ESTADÍSTICAS
+// ============================================
+
 async function cargarEstadisticas() {
     try {
         console.log('🔍 Obteniendo estadísticas...');
 
-        // 1. Estadísticas de ventas
         const stats = await getDashboardStats();
 
-        // 2. Estadísticas de validación de pagos
         const { data: pagos, error: errorPagos } = await supabaseClient
             .from('pagos')
             .select('validado, venta:ventas!inner(estado)')
@@ -78,8 +83,6 @@ async function cargarEstadisticas() {
         const validados = pagos.filter(p => p.validado === true).length;
         const pendientes = totalPagos - validados;
 
-        // 3. Estadísticas de facturación
-        // Facturas emitidas (notas con número de factura)
         const { count: facturadas, error: errorFacturadas } = await supabaseClient
             .from('ventas')
             .select('*', { count: 'exact', head: true })
@@ -89,7 +92,6 @@ async function cargarEstadisticas() {
 
         if (errorFacturadas) throw errorFacturadas;
 
-        // Facturas pendientes (notas sin número de factura)
         const { count: pendientesFactura, error: errorPendientesFactura } = await supabaseClient
             .from('ventas')
             .select('*', { count: 'exact', head: true })
@@ -98,54 +100,33 @@ async function cargarEstadisticas() {
 
         if (errorPendientesFactura) throw errorPendientesFactura;
 
-        // Actualizar DOM
         document.getElementById('stat-total-ventas').textContent = formatUSD(stats.totalVentas);
         document.getElementById('stat-total-pagado').textContent = formatUSD(stats.totalPagado);
         document.getElementById('stat-total-pendiente').textContent = formatUSD(Math.max(0, stats.totalPendiente));
         document.getElementById('stat-pendientes-count').textContent = stats.ventasPendientes;
 
-        // Resumen por estado
         document.getElementById('res-pendientes').textContent = stats.ventasPendientes;
         document.getElementById('res-parciales').textContent = stats.ventasParciales;
         document.getElementById('res-pagadas').textContent = stats.ventasPagadas;
         document.getElementById('res-anuladas').textContent = stats.ventasAnuladas;
 
-        // Pagos validados / pendientes
         document.getElementById('stat-pagos-validados').textContent = validados;
         document.getElementById('stat-pagos-pendientes-validar').textContent = pendientes;
-
-        // Facturas emitidas / pendientes
         document.getElementById('stat-facturas-emitidas').textContent = facturadas || 0;
         document.getElementById('stat-facturas-pendientes').textContent = pendientesFactura || 0;
 
-        // Asignar eventos click para redirigir
-        const cardValidados = document.getElementById('stat-card-validados');
-        if (cardValidados) {
-            cardValidados.addEventListener('click', () => {
-                window.location.href = 'pagos.html?filtro=validados';
-            });
-        }
-
-        const cardPendientes = document.getElementById('stat-card-pendientes');
-        if (cardPendientes) {
-            cardPendientes.addEventListener('click', () => {
-                window.location.href = 'pagos.html?filtro=pendientes';
-            });
-        }
-
-        const cardFacturasEmitidas = document.getElementById('stat-card-facturas-emitidas');
-        if (cardFacturasEmitidas) {
-            cardFacturasEmitidas.addEventListener('click', () => {
-                window.location.href = 'ventas.html?filtro=facturadas';
-            });
-        }
-
-        const cardFacturasPendientes = document.getElementById('stat-card-facturas-pendientes');
-        if (cardFacturasPendientes) {
-            cardFacturasPendientes.addEventListener('click', () => {
-                window.location.href = 'ventas.html?filtro=pendientes';
-            });
-        }
+        document.getElementById('stat-card-validados').addEventListener('click', () => {
+            window.location.href = 'pagos.html?filtro=validados';
+        });
+        document.getElementById('stat-card-pendientes').addEventListener('click', () => {
+            window.location.href = 'pagos.html?filtro=pendientes';
+        });
+        document.getElementById('stat-card-facturas-emitidas').addEventListener('click', () => {
+            window.location.href = 'ventas.html?filtro=facturadas';
+        });
+        document.getElementById('stat-card-facturas-pendientes').addEventListener('click', () => {
+            window.location.href = 'ventas.html?filtro=pendientes';
+        });
 
         console.log('✅ Estadísticas renderizadas correctamente');
 
@@ -154,6 +135,10 @@ async function cargarEstadisticas() {
         showAlert('Error al cargar las estadísticas: ' + error.message, 'error');
     }
 }
+
+// ============================================
+// VENTAS RECIENTES (con botón Estado de Cuenta)
+// ============================================
 
 async function cargarVentasRecientes() {
     try {
@@ -166,7 +151,7 @@ async function cargarVentasRecientes() {
         if (!ventas || ventas.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="9">
+                    <td colspan="8">
                         <div class="empty-state">
                             <div class="empty-state-icon">📄</div>
                             <h3>Sin notas de entrega</h3>
@@ -200,34 +185,21 @@ async function cargarVentasRecientes() {
             const vencimientoClass = diasRestantes < 0 ? 'text-danger' : diasRestantes <= 3 ? 'text-warning' : '';
             const vencimientoText = diasRestantes < 0 ? `Vencido (${Math.abs(diasRestantes)}d)` : `${diasRestantes}d restantes`;
 
-            // === IVA y Total con IVA ===
             const tieneFactura = v.numero_factura && v.numero_factura.trim() !== '';
             const montoBase = parseFloat(v.monto_total_usd) || 0;
             const montoIVA = parseFloat(v.monto_iva) || 0;
             const totalConIVA = parseFloat(v.total_con_iva) || montoBase;
 
-            // Monto a mostrar (total con IVA si tiene factura, si no, base)
             const montoMostrar = tieneFactura ? totalConIVA : montoBase;
             let montoHtml = `<strong>${formatUSD(montoMostrar)}</strong>`;
             if (tieneFactura) {
                 montoHtml += `<br><small style="color: var(--gray-500);">Base: ${formatUSD(montoBase)}</small>`;
             }
 
-            // IVA (solo si tiene factura)
-            const ivaHtml = tieneFactura
-                ? `<span style="color: var(--warning); font-weight: 600;">${formatUSD(montoIVA)}</span>`
-                : `<span style="color: var(--gray-400);">-</span>`;
-
-            // === Pagos Validados ===
-            let pagosValidadosHtml = `<span style="color: var(--gray-400);">Sin pagos</span>`;
-            if (v.pagos && v.pagos.length > 0) {
-                const validados = v.pagos.filter(p => p.validado === true);
-                if (validados.length > 0) {
-                    pagosValidadosHtml = `<span class="badge badge-pagada">✅ ${validados.length} validado(s)</span>`;
-                } else {
-                    pagosValidadosHtml = `<span class="badge badge-pendiente">⏳ Sin validar</span>`;
-                }
-            }
+            // Botón Estado de Cuenta
+            const botonEstadoCuenta = v.cliente_id
+                ? `<button class="btn btn-sm btn-ghost" onclick="irEstadoCuenta('${v.cliente_id}')" title="Ver Estado de Cuenta del cliente" style="color:var(--diamelab-accent);">📊</button>`
+                : '';
 
             return `
                 <tr>
@@ -236,10 +208,9 @@ async function cargarVentasRecientes() {
                     <td>${formatDate(v.fecha_emision)}</td>
                     <td class="${vencimientoClass}">${formatDate(v.fecha_vencimiento)} <small>(${vencimientoText})</small></td>
                     <td>${montoHtml}</td>
-                    <td style="text-align: center;">${ivaHtml}</td>
                     <td><span class="badge ${badgeClass}">${estadoText}</span></td>
-                    <td style="text-align: center;">${pagosValidadosHtml}</td>
                     <td>${v.sede || 'N/A'}</td>
+                    <td style="text-align:center;">${botonEstadoCuenta}</td>
                 </tr>
             `;
         }).join('');
@@ -250,7 +221,7 @@ async function cargarVentasRecientes() {
         console.error('❌ Error cargando ventas recientes:', error);
         document.getElementById('tbody-ventas-recientes').innerHTML = `
             <tr>
-                <td colspan="9" style="text-align: center; padding: 2rem; color: var(--danger);">
+                <td colspan="8" style="text-align:center;padding:2rem;color:var(--danger);">
                     Error al cargar los datos: ${error.message}
                 </td>
             </tr>
@@ -259,13 +230,22 @@ async function cargarVentasRecientes() {
 }
 
 // ============================================
-// BOTÓN FLOTANTE - ESTADO DE CUENTA RÁPIDO
+// IR A ESTADO DE CUENTA DEL CLIENTE
 // ============================================
 
-document.addEventListener('DOMContentLoaded', async function() {
-    // ... (el resto de la inicialización ya existe) ...
+window.irEstadoCuenta = function(clienteId) {
+    if (!clienteId) {
+        showAlert('No se puede identificar el cliente.', 'warning');
+        return;
+    }
+    window.location.href = `estado-cuenta.html?cliente=${clienteId}`;
+};
 
-    // Referencias a elementos del modal FAB
+// ============================================
+// FAB: BOTÓN FLOTANTE PARA ESTADO DE CUENTA
+// ============================================
+
+async function configurarFAB() {
     const fabBtn = document.getElementById('fab-estado-cuenta');
     const modal = document.getElementById('modal-fab-cliente');
     const btnCerrar = document.getElementById('btn-cerrar-fab-cliente');
@@ -277,7 +257,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     let clientesFab = [];
     let clienteSeleccionadoFab = null;
 
-    // Cargar clientes al abrir el modal
     async function cargarClientesFab() {
         try {
             clientesFab = await getClientes();
@@ -287,7 +266,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Mostrar resultados de búsqueda
     function mostrarResultadosFab(query) {
         const q = query.trim().toLowerCase();
         const filtrados = clientesFab.filter(c =>
@@ -319,7 +297,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         resultados.style.display = 'block';
     }
 
-    // Eventos del modal FAB
     fabBtn.addEventListener('click', async () => {
         await cargarClientesFab();
         clienteSeleccionadoFab = null;
@@ -331,12 +308,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         setTimeout(() => inputBusqueda.focus(), 100);
     });
 
-    btnCerrar.addEventListener('click', () => {
-        modal.style.display = 'none';
-    });
-    btnCancelar.addEventListener('click', () => {
-        modal.style.display = 'none';
-    });
+    btnCerrar.addEventListener('click', () => { modal.style.display = 'none'; });
+    btnCancelar.addEventListener('click', () => { modal.style.display = 'none'; });
     modal.addEventListener('click', (e) => {
         if (e.target === e.currentTarget) modal.style.display = 'none';
     });
@@ -358,7 +331,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
-    // Botón "Ir a Estado de Cuenta"
     btnIr.addEventListener('click', () => {
         if (clienteSeleccionadoFab) {
             window.location.href = `estado-cuenta.html?cliente=${clienteSeleccionadoFab.id}`;
@@ -367,14 +339,15 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
-    // Cerrar resultados al hacer click fuera
     document.addEventListener('click', (e) => {
         if (!e.target.closest('#modal-fab-cliente')) {
             resultados.style.display = 'none';
         }
     });
-});
+}
 
+// Exportar funciones globales
 window.updateUserAvatar = updateUserAvatar;
 window.cargarEstadisticas = cargarEstadisticas;
 window.cargarVentasRecientes = cargarVentasRecientes;
+window.irEstadoCuenta = irEstadoCuenta;

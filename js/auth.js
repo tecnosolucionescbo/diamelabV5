@@ -370,7 +370,7 @@ function showAboutModal() {
 // AUTO-VERIFICACIÓN AL CARGAR PÁGINAS
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
-    const protectedPages = ['dashboard.html', 'ventas.html', 'pagos.html', 'usuarios.html', 'clientes.html', 'backup.html', 'reportes.html'];
+    const protectedPages = ['dashboard.html', 'ventas.html', 'pagos.html', 'usuarios.html', 'clientes.html', 'backup.html', 'reportes.html', 'estado-cuenta.html'];
     const currentPage = window.location.pathname.split('/').pop();
 
     if (protectedPages.includes(currentPage)) {

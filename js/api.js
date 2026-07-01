@@ -344,23 +344,29 @@ async function getVentas(filtros = {}, limit = null, offset = 0) {
     if (filtros.sede && !isAdmin()) query = query.eq('sede', getUserSede());
     else if (filtros.sede) query = query.eq('sede', filtros.sede);
     if (filtros.cliente_id) query = query.eq('cliente_id', filtros.cliente_id);
-    if (filtros.fecha_desde) query = query.gte('fecha_emision', filtros.fecha_desde);
-    if (filtros.fecha_hasta) query = query.lte('fecha_emision', filtros.fecha_hasta);
-if (filtros.busqueda) {
-    const busqueda = filtros.busqueda.trim();
-    // Buscar clientes que coincidan exactamente con la búsqueda
-    const { data: clientes } = await supabaseClient
-        .from('clientes')
-        .select('id')
-        .ilike('razon_social', `%${busqueda}%`);
-    
-    const ids = clientes.map(c => c.id);
-    if (ids.length > 0) {
-        query = query.or(`correlacion_a2.ilike.%${busqueda}%,cliente_id.in.(${ids.join(',')})`);
-    } else {
-        query = query.ilike('correlacion_a2', `%${busqueda}%`);
+    if (filtros.fecha_desde) {
+        query = query.gte('fecha_emision', filtros.fecha_desde);
     }
-}
+    if (filtros.fecha_hasta) {
+        // Agregar un día para incluir todo el día final
+        const fechaFin = new Date(filtros.fecha_hasta);
+        fechaFin.setDate(fechaFin.getDate() + 1);
+        const fechaFinStr = fechaFin.toISOString().split('T')[0];
+        query = query.lt('fecha_emision', fechaFinStr);
+    }
+    if (filtros.busqueda) {
+        const busqueda = filtros.busqueda.trim();
+        const { data: clientes } = await supabaseClient
+            .from('clientes')
+            .select('id')
+            .ilike('razon_social', `%${busqueda}%`);
+        const ids = clientes.map(c => c.id);
+        if (ids.length > 0) {
+            query = query.or(`correlacion_a2.ilike.%${busqueda}%,cliente_id.in.(${ids.join(',')})`);
+        } else {
+            query = query.ilike('correlacion_a2', `%${busqueda}%`);
+        }
+    }
     if (filtros.facturado === true) {
         query = query.not('numero_factura', 'is', null).neq('numero_factura', '');
     } else if (filtros.facturado === false) {

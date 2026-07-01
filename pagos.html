@@ -39,9 +39,9 @@
                         Pagos
                     </a>
                     <a href="estado-cuenta.html" class="nav-link">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-        Estado de Cuenta
-    </a>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                        Estado de Cuenta
+                    </a>
                 </div>
 
                 <div class="nav-section admin-only">
@@ -353,6 +353,64 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- MODAL DE DISTRIBUCIÓN DE EXCEDENTE (PAGOS)   -->
+    <!-- ============================================ -->
+    <div class="modal-overlay" id="modal-distribucion" style="display: none;">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>Distribuir Pago en Múltiples Notas</h3>
+                <button class="modal-close" id="btn-cerrar-distribucion">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-md);">
+                    <div style="background: var(--gray-50); padding: var(--space-sm); border-radius: var(--radius-md); text-align: center;">
+                        <small style="color: var(--gray-500);">Monto Total a Pagar</small>
+                        <div id="d-monto-total" style="font-size: 1.2rem; font-weight: 700; color: var(--diamelab-primary);">$0.00</div>
+                    </div>
+                    <div style="background: var(--gray-50); padding: var(--space-sm); border-radius: var(--radius-md); text-align: center;">
+                        <small style="color: var(--gray-500);">Saldo de la Nota Actual</small>
+                        <div id="d-saldo-nota" style="font-size: 1.2rem; font-weight: 700; color: var(--info);">$0.00</div>
+                    </div>
+                    <div style="background: var(--gray-50); padding: var(--space-sm); border-radius: var(--radius-md); text-align: center;">
+                        <small style="color: var(--gray-500);">Excedente a Distribuir</small>
+                        <div id="d-excedente" style="font-size: 1.2rem; font-weight: 700; color: var(--warning);">$0.00</div>
+                    </div>
+                </div>
+
+                <p style="font-size: 0.9rem; color: var(--gray-600); margin-bottom: var(--space-sm);">
+                    Seleccione las notas a las que desea asignar el excedente y ajuste los montos:
+                </p>
+
+                <div style="overflow-x: auto; margin-bottom: var(--space-md);">
+                    <table class="table" style="min-width: 600px;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: center; width: 60px;">Incluir</th>
+                                <th style="text-align: left;">Nota</th>
+                                <th style="text-align: left;">Saldo</th>
+                                <th style="text-align: center;">Monto a Pagar</th>
+                                <th style="text-align: center;">Referencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="d-tbody-notas"></tbody>
+                    </table>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: var(--space-md); border-top: 1px solid var(--gray-200);">
+                    <div>
+                        <span style="font-weight: 600;">Excedente restante: </span>
+                        <span id="d-excedente-restante" style="font-weight: 700; color: var(--diamelab-primary);">$0.00</span>
+                    </div>
+                    <div style="display: flex; gap: var(--space-sm);">
+                        <button class="btn btn-ghost" id="btn-cancelar-distribucion">Cancelar</button>
+                        <button class="btn btn-primary" id="btn-confirmar-distribucion">Confirmar Distribución</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Modal Editar Pago -->

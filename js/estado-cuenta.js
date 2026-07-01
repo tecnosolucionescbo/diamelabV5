@@ -1,8 +1,9 @@
 /**
  * Módulo de Estado de Cuenta por Cliente
  * VERSIÓN CORREGIDA:
+ * - Elimina duplicación de 'debounce' (usa la de utils.js)
  * - Buscador inteligente de clientes (autocompletado)
- * - PDF con jspdf-autotable (sin errores de html2canvas)
+ * - PDF con jspdf-autotable (sin errores)
  * - Filtro de fechas corregido
  * - Cálculo de días de mora solo para notas vencidas
  */
@@ -10,19 +11,6 @@
 let clientesCache = [];
 let datosEstado = [];
 let clienteSeleccionado = null;
-
-// Debounce para el buscador
-const debounce = (func, wait) => {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-};
 
 document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = await protectRoute();
@@ -45,7 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await actualizarDisplayTasa('#tasa-bcv');
     });
 
-    // Buscador de clientes con debounce
+    // Buscador de clientes (usa debounce de utils.js)
     const inputBusqueda = document.getElementById('cliente-busqueda');
     const resultados = document.getElementById('resultados-clientes');
 
@@ -58,7 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const filtrados = clientesCache.filter(c =>
             c.razon_social.toLowerCase().includes(query.toLowerCase()) ||
             c.rif.toLowerCase().includes(query.toLowerCase())
-        ).slice(0, 15); // limitar a 15 resultados
+        ).slice(0, 15);
 
         if (filtrados.length === 0) {
             resultados.innerHTML = '<div class="item" style="color:var(--gray-400);">No se encontraron clientes</div>';
@@ -84,7 +72,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('cliente-seleccionado').value = id;
                 clienteSeleccionado = clientesCache.find(c => c.id === id);
                 resultados.style.display = 'none';
-                // Opcional: generar automáticamente
             });
         });
     }, 300));
@@ -143,10 +130,8 @@ async function generarEstadoCuenta() {
     try {
         showLoading('#btn-generar', 'Generando...');
 
-        // Obtener el cliente seleccionado
         clienteSeleccionado = clientesCache.find(c => c.id === clienteId);
 
-        // Obtener ventas del cliente con pagos
         const filtros = { cliente_id: clienteId };
         if (fechaDesde) filtros.fecha_desde = fechaDesde;
         if (fechaHasta) filtros.fecha_hasta = fechaHasta;
@@ -161,7 +146,6 @@ async function generarEstadoCuenta() {
             return;
         }
 
-        // Procesar datos
         datosEstado = ventas.map(v => {
             const pagos = v.pagos || [];
             const totalPagado = pagos.reduce((sum, p) => sum + parseFloat(p.monto_pagado_usd), 0);
@@ -170,7 +154,6 @@ async function generarEstadoCuenta() {
             const totalConIVA = parseFloat(v.total_con_iva) || montoBase;
             const saldo = totalConIVA - totalPagado;
 
-            // Días de mora: solo si saldo > 0 y la fecha de vencimiento es anterior a hoy
             let diasMora = 0;
             if (saldo > 0.01) {
                 const hoy = new Date();
@@ -195,7 +178,6 @@ async function generarEstadoCuenta() {
             };
         });
 
-        // Calcular resumen
         const totalFacturado = datosEstado.reduce((sum, v) => sum + v.totalConIVA, 0);
         const totalPagado = datosEstado.reduce((sum, v) => sum + v.totalPagado, 0);
         const saldoTotal = totalFacturado - totalPagado;
@@ -205,7 +187,6 @@ async function generarEstadoCuenta() {
             ? Math.round(notasConMora.reduce((sum, v) => sum + v.diasMora, 0) / notasConMora.length)
             : 0;
 
-        // Mostrar resumen
         document.getElementById('resumen-container').style.display = '';
         document.getElementById('res-total-facturado').textContent = formatUSD(totalFacturado);
         document.getElementById('res-total-pagado').textContent = formatUSD(totalPagado);
@@ -213,7 +194,6 @@ async function generarEstadoCuenta() {
         document.getElementById('res-cantidad-notas').textContent = cantidadNotas;
         document.getElementById('res-dias-mora').textContent = diasMoraPromedio;
 
-        // Mostrar tabla
         renderizarTabla(datosEstado);
         document.getElementById('detalle-container').style.display = '';
 
@@ -272,7 +252,7 @@ function renderizarTabla(datos) {
 }
 
 // ============================================
-// EXPORTAR A EXCEL (sin cambios)
+// EXPORTAR A EXCEL
 // ============================================
 
 function exportarExcel() {
@@ -324,7 +304,7 @@ function exportarExcel() {
 }
 
 // ============================================
-// EXPORTAR A PDF (con jspdf-autotable - CORREGIDO)
+// EXPORTAR A PDF (con jspdf-autotable)
 // ============================================
 
 function exportarPDF() {
@@ -337,21 +317,18 @@ function exportarPDF() {
 
     try {
         const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('l', 'mm', 'a4'); // landscape
+        const doc = new jsPDF('l', 'mm', 'a4');
 
-        // Configurar fuente y estilos
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
         doc.text('Estado de Cuenta', 14, 22);
 
-        // Datos del cliente
         doc.setFontSize(11);
         doc.setFont('helvetica', 'normal');
         const cliente = clienteSeleccionado || {};
         doc.text(`Cliente: ${cliente.razon_social || ''}`, 14, 30);
         doc.text(`RIF: ${cliente.rif || ''}`, 14, 36);
 
-        // Resumen (en una línea horizontal)
         const resumenY = 44;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
@@ -375,7 +352,6 @@ function exportarPDF() {
         });
         doc.setTextColor(0);
 
-        // Tabla de notas
         const tableColumn = ['Nº Nota', 'Fecha Emisión', 'Vencimiento', 'Base', 'IVA', 'Total', 'Estado', 'Factura', 'Pagado', 'Saldo', 'Mora'];
         const tableRows = datosEstado.map(v => [
             v.correlacion_a2 || '',
@@ -414,7 +390,6 @@ function exportarPDF() {
             margin: { left: 14, right: 14 }
         });
 
-        // Pie de página
         const pageCount = doc.internal.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);

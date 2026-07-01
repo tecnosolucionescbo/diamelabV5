@@ -176,10 +176,13 @@
 
                 <!-- Tabla de detalle -->
                 <div class="card" id="reporte-detalle" style="display: none;">
-                    <div class="card-header">
-                        <h3>Detalle de Notas</h3>
-                        <button class="btn btn-sm btn-secondary btn-exportar" id="btn-exportar-csv">📊 Exportar CSV</button>
-                    </div>
+                  <div class="card-header">
+    <h3>Detalle de Notas</h3>
+    <div style="display: flex; gap: var(--space-sm);">
+        <button class="btn btn-secondary btn-sm" id="btn-exportar-pdf">📄 PDF</button>
+        <button class="btn btn-secondary btn-sm" id="btn-exportar-csv">📊 CSV</button>
+    </div>
+</div>
                     <div class="card-body" style="padding: 0;">
                         <div class="table-container">
                             <table class="table">

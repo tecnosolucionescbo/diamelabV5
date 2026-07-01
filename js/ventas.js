@@ -108,16 +108,30 @@ function setupEventListeners() {
     document.getElementById('filtro-estado').addEventListener('change', () => cargarVentas(true));
     document.getElementById('filtro-facturado').addEventListener('change', () => cargarVentas(true));
 
-    // === FILTROS DE FECHA (con ambos eventos para máxima compatibilidad) ===
+    // === FILTROS DE FECHA - EVENTOS INPUT Y CHANGE ===
     const fechaDesde = document.getElementById('filtro-fecha-desde');
     const fechaHasta = document.getElementById('filtro-fecha-hasta');
+
     if (fechaDesde) {
-        fechaDesde.addEventListener('input', () => cargarVentas(true));
-        fechaDesde.addEventListener('change', () => cargarVentas(true));
+        fechaDesde.addEventListener('input', () => {
+            console.log('📅 Fecha Desde (input):', fechaDesde.value);
+            cargarVentas(true);
+        });
+        fechaDesde.addEventListener('change', () => {
+            console.log('📅 Fecha Desde (change):', fechaDesde.value);
+            cargarVentas(true);
+        });
     }
+
     if (fechaHasta) {
-        fechaHasta.addEventListener('input', () => cargarVentas(true));
-        fechaHasta.addEventListener('change', () => cargarVentas(true));
+        fechaHasta.addEventListener('input', () => {
+            console.log('📅 Fecha Hasta (input):', fechaHasta.value);
+            cargarVentas(true);
+        });
+        fechaHasta.addEventListener('change', () => {
+            console.log('📅 Fecha Hasta (change):', fechaHasta.value);
+            cargarVentas(true);
+        });
     }
 
     const filtroSede = document.getElementById('filtro-sede');
@@ -285,8 +299,9 @@ function obtenerFiltros() {
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const facturado = document.getElementById('filtro-facturado').value;
 
-  //  console.log('📅 Fecha Desde:', fechaDesde);
-  //  console.log('📅 Fecha Hasta:', fechaHasta);
+    // 🔴 ELIMINA O COMENTA ESTOS CONSOLE.LOG SI YA NO LOS NECESITAS
+    // console.log('📅 Fecha Desde:', fechaDesde);
+    // console.log('📅 Fecha Hasta:', fechaHasta);
 
     let busqueda = document.getElementById('filtro-busqueda').value.trim();
     busqueda = busqueda.replace(/\s+/g, ' ');

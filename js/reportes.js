@@ -149,42 +149,18 @@ function exportarPDF() {
 
     try {
         const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('l', 'mm', 'a4'); // landscape
+        const doc = new jsPDF('l', 'mm', 'a4');
 
-        // ===== MEMBRETE =====
-        const empresa = {
-            nombre: 'Diamelab, C.A.',
-            rif: 'J-XXXXXXXX-X',
-            direccion: 'Av. Principal, Edif. Diamelab, Ciudad Guayana',
-            telefono: '0286-XXXXXXX',
-            email: 'ventas@diamelab.com',
-            slogan: 'Equipos e Insumos para Laboratorios Clínicos'
-        };
-
-        // Logo (si existe, usar imagen; si no, solo texto)
-        // Si tienes logo en assets, descomenta y ajusta la ruta:
-        // try { doc.addImage('assets/logo-diamelab.jpg', 'JPEG', 14, 10, 25, 25); } catch(e) {}
-
-        // Título de la empresa
+        // ===== MEMBRETE SIMPLIFICADO (sin RIF, teléfono, email) =====
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(26, 35, 126); // Azul navy
-        doc.text(empresa.nombre, 14, 22);
+        doc.setTextColor(26, 35, 126);
+        doc.text('Diamelab, C.A.', 14, 22);
 
-        // Slogan
         doc.setFontSize(9);
         doc.setFont('helvetica', 'italic');
         doc.setTextColor(100);
-        doc.text(empresa.slogan, 14, 28);
-
-        // Datos de contacto (alineados a la derecha)
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(80);
-        const contactoY = 20;
-        doc.text(`RIF: ${empresa.rif}`, 250, contactoY, { align: 'right' });
-        doc.text(`Tel: ${empresa.telefono}`, 250, contactoY + 5, { align: 'right' });
-        doc.text(`Email: ${empresa.email}`, 250, contactoY + 10, { align: 'right' });
+        doc.text('Equipos e Insumos para Laboratorios Clínicos', 14, 28);
 
         // Línea separadora
         doc.setDrawColor(26, 35, 126);

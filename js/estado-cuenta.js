@@ -1,25 +1,12 @@
 /**
  * Módulo de Estado de Cuenta por Cliente
- * VERSIÓN CON FECHA DESDE EN BLANCO Y FECHA HASTA = HOY
+ * Versión sin duplicación de debounce (usa la de utils.js)
  */
 
 let clientesCache = [];
 let datosEstado = [];
 let clienteSeleccionado = null;
 let timeoutGenerar = null;
-
-// Debounce para el buscador
-const debounce = (func, wait) => {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-};
 
 document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = await protectRoute();
@@ -33,13 +20,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cargar clientes
     await cargarClientes();
 
-    // Leer parámetro de URL (para venir desde Notas de Entrega o Dashboard)
+    // Leer parámetro de URL
     const urlParams = new URLSearchParams(window.location.search);
     const clienteIdUrl = urlParams.get('cliente');
 
-    // ===== FECHAS POR DEFECTO: DESDE EN BLANCO, HASTA = HOY =====
+    // Fechas: Desde vacío, Hasta = hoy
     const hoy = new Date();
-    document.getElementById('fecha-desde').value = ''; // Vacío
+    document.getElementById('fecha-desde').value = '';
     document.getElementById('fecha-hasta').value = hoy.toISOString().split('T')[0];
 
     // Eventos
@@ -51,12 +38,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         await actualizarDisplayTasa('#tasa-bcv');
     });
 
-    // Buscador de clientes con debounce
+    // Buscador de clientes (usa debounce de utils.js)
     const inputBusqueda = document.getElementById('cliente-busqueda');
     const resultados = document.getElementById('resultados-clientes');
     const selectClientes = document.getElementById('cliente-select');
 
-    // Sincronizar buscador con selector
+    // Debounce para el input
     inputBusqueda.addEventListener('input', debounce(async (e) => {
         const query = e.target.value.trim();
         if (query.length < 2) {
@@ -86,7 +73,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             el.addEventListener('click', () => {
                 seleccionarCliente(el.dataset.id, el.dataset.nombre, el.dataset.rif);
                 resultados.style.display = 'none';
-                // Generar automáticamente después de seleccionar
                 clearTimeout(timeoutGenerar);
                 timeoutGenerar = setTimeout(() => generarEstadoCuenta(), 300);
             });
@@ -100,7 +86,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cliente = clientesCache.find(c => c.id === id);
             if (cliente) {
                 seleccionarCliente(cliente.id, cliente.razon_social, cliente.rif);
-                // Generar automáticamente después de seleccionar
                 clearTimeout(timeoutGenerar);
                 timeoutGenerar = setTimeout(() => generarEstadoCuenta(), 300);
             }
@@ -128,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Si vino con clienteId en URL, preseleccionarlo y generar automáticamente
+    // Si vino con clienteId en URL
     if (clienteIdUrl) {
         const cliente = clientesCache.find(c => c.id === clienteIdUrl);
         if (cliente) {
@@ -180,7 +165,7 @@ async function generarEstadoCuenta() {
     const fechaHasta = document.getElementById('fecha-hasta').value;
 
     if (!clienteId) {
-        showAlert('Seleccione un cliente de la lista de búsqueda o del desplegable.', 'warning');
+        showAlert('Seleccione un cliente.', 'warning');
         return;
     }
 
@@ -189,7 +174,6 @@ async function generarEstadoCuenta() {
 
         clienteSeleccionado = clientesCache.find(c => c.id === clienteId);
 
-        // ===== CONSULTA CON FILTROS DE FECHA OPTATIVOS =====
         let query = supabaseClient
             .from('ventas')
             .select(`
@@ -200,12 +184,10 @@ async function generarEstadoCuenta() {
             .eq('cliente_id', clienteId)
             .neq('estado', 'anulada');
 
-        // Solo aplicar filtro desde si tiene valor
         if (fechaDesde && fechaDesde.trim() !== '') {
             query = query.gte('fecha_emision', fechaDesde);
         }
         if (fechaHasta && fechaHasta.trim() !== '') {
-            // Incluir todo el día final
             const fechaFin = new Date(fechaHasta);
             fechaFin.setDate(fechaFin.getDate() + 1);
             const fechaFinStr = fechaFin.toISOString().split('T')[0];
@@ -386,7 +368,7 @@ function exportarExcel() {
 }
 
 // ============================================
-// EXPORTAR A PDF (CON MEMBRETE SIMPLIFICADO)
+// EXPORTAR A PDF
 // ============================================
 
 function exportarPDF() {
@@ -401,7 +383,7 @@ function exportarPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('l', 'mm', 'a4');
 
-        // ===== MEMBRETE SIMPLIFICADO =====
+        // Membrete simplificado
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(26, 35, 126);
@@ -416,13 +398,11 @@ function exportarPDF() {
         doc.setLineWidth(0.5);
         doc.line(14, 32, 284, 32);
 
-        // Título
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
         doc.text('ESTADO DE CUENTA', 14, 40);
 
-        // Datos del cliente
         const cliente = clienteSeleccionado || {};
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
@@ -430,7 +410,6 @@ function exportarPDF() {
         doc.text(`Cliente: ${cliente.razon_social || ''}`, 14, 46);
         doc.text(`RIF: ${cliente.rif || ''}`, 14, 52);
 
-        // Resumen
         const resumenY = 60;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
@@ -454,7 +433,6 @@ function exportarPDF() {
         });
         doc.setTextColor(0);
 
-        // Tabla
         const tableColumn = ['Nº Nota', 'Fecha Emisión', 'Vencimiento', 'Base', 'IVA', 'Total', 'Estado', 'Factura', 'Pagado', 'Saldo', 'Mora'];
         const tableRows = datosEstado.map(v => [
             v.correlacion_a2 || '',
@@ -493,7 +471,6 @@ function exportarPDF() {
             margin: { left: 14, right: 14 }
         });
 
-        // Pie
         const pageCount = doc.internal.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);

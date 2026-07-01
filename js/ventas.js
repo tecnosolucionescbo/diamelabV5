@@ -101,16 +101,24 @@ function setupSedeUsuario() {
 // ============================================
 
 function setupEventListeners() {
-    // Filtros
+    // Filtros principales
     document.getElementById('btn-filtrar').addEventListener('click', () => cargarVentas(true));
     document.getElementById('btn-limpiar').addEventListener('click', limpiarFiltros);
     document.getElementById('filtro-busqueda').addEventListener('input', debounce(() => cargarVentas(true), 400));
     document.getElementById('filtro-estado').addEventListener('change', () => cargarVentas(true));
     document.getElementById('filtro-facturado').addEventListener('change', () => cargarVentas(true));
 
-    // === NUEVO: Eventos para fechas con actualización automática ===
-    document.getElementById('filtro-fecha-desde').addEventListener('change', () => cargarVentas(true));
-    document.getElementById('filtro-fecha-hasta').addEventListener('change', () => cargarVentas(true));
+    // === FILTROS DE FECHA (con ambos eventos para máxima compatibilidad) ===
+    const fechaDesde = document.getElementById('filtro-fecha-desde');
+    const fechaHasta = document.getElementById('filtro-fecha-hasta');
+    if (fechaDesde) {
+        fechaDesde.addEventListener('input', () => cargarVentas(true));
+        fechaDesde.addEventListener('change', () => cargarVentas(true));
+    }
+    if (fechaHasta) {
+        fechaHasta.addEventListener('input', () => cargarVentas(true));
+        fechaHasta.addEventListener('change', () => cargarVentas(true));
+    }
 
     const filtroSede = document.getElementById('filtro-sede');
     if (filtroSede) filtroSede.addEventListener('change', () => cargarVentas(true));

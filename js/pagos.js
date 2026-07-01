@@ -1,6 +1,6 @@
 /**
  * Sistema Diamelab - Modulo de Pagos
- * VERSIÓN CORREGIDA - SIN DEPENDENCIA DE getNotasPendientesPorCliente
+ * VERSIÓN CORREGIDA - Incluye cliente_id en todas las consultas
  */
 
 // Estado global
@@ -208,7 +208,7 @@ function updateUserAvatarPagos() {
 }
 
 // ============================================
-// CARGAR VENTAS EN SELECT
+// CARGAR VENTAS EN SELECT (INCLUYE cliente_id)
 // ============================================
 async function cargarVentasSelect() {
     try {
@@ -216,6 +216,7 @@ async function cargarVentasSelect() {
             .from('ventas')
             .select(`
                 id,
+                cliente_id,
                 correlacion_a2,
                 monto_total_usd,
                 total_con_iva,
@@ -248,7 +249,7 @@ async function cargarVentasSelect() {
 }
 
 // ============================================
-// SELECCIONAR VENTA
+// SELECCIONAR VENTA (ASEGURA cliente_id)
 // ============================================
 async function seleccionarVenta(ventaId) {
     try {
@@ -256,6 +257,12 @@ async function seleccionarVenta(ventaId) {
         if (!venta) {
             venta = await getVentaById(ventaId);
         }
+
+        // Asegurar que cliente_id esté presente
+        if (venta && venta.cliente && venta.cliente.id && !venta.cliente_id) {
+            venta.cliente_id = venta.cliente.id;
+        }
+
         ventaSeleccionada = venta;
         pagosCache = await getPagosByVenta(ventaId);
 
@@ -342,7 +349,7 @@ function ocultarDetalleVenta() {
 }
 
 // ============================================
-// BUSCAR VENTAS
+// BUSCAR VENTAS (CON cliente_id)
 // ============================================
 async function buscarPorA2() {
     const a2 = document.getElementById('buscar-a2').value.trim();
@@ -356,6 +363,7 @@ async function buscarPorA2() {
             .from('ventas')
             .select(`
                 id,
+                cliente_id,
                 correlacion_a2,
                 monto_total_usd,
                 total_con_iva,
@@ -421,6 +429,7 @@ async function buscarPorCliente() {
             .from('ventas')
             .select(`
                 id,
+                cliente_id,
                 correlacion_a2,
                 monto_total_usd,
                 total_con_iva,
@@ -556,7 +565,7 @@ function manejarCambioFecha(prefix) {
 }
 
 // ============================================
-// GUARDAR PAGO (CORREGIDO - SIN fecha_emision)
+// GUARDAR PAGO (CORREGIDO - CON FALLBACK DE cliente_id)
 // ============================================
 async function guardarPago() {
     try {
@@ -596,8 +605,11 @@ async function guardarPago() {
             return;
         }
 
-        // ===== EXCEDENTE: Buscar otras notas del cliente con saldo pendiente =====
-        const clienteId = ventaSeleccionada.cliente_id;
+        // ===== EXCEDENTE: Obtener cliente_id (con fallback) =====
+        let clienteId = ventaSeleccionada.cliente_id;
+        if (!clienteId && ventaSeleccionada.cliente && ventaSeleccionada.cliente.id) {
+            clienteId = ventaSeleccionada.cliente.id;
+        }
         if (!clienteId) {
             showAlert('La nota seleccionada no tiene cliente asociado. No se puede distribuir el excedente.', 'error');
             return;

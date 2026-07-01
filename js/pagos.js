@@ -1011,6 +1011,288 @@ function renderizarPagosGlobales() {
 }
 
 // ============================================
+// GUARDAR PAGO SIMPLE (una sola nota)
+// ============================================
+
+async function guardarPagoSimple(ventaId, montoUSD, fechaPago, metodoPago, tasaUsada, referencia, banco, validado) {
+    try {
+        showLoading('#btn-guardar-pago', 'Registrando...');
+
+        const user = JSON.parse(localStorage.getItem('diamelab_user') || '{}');
+
+        const pagoData = {
+            venta_id: ventaId,
+            vendedor_id: user.id,
+            fecha_pago: fechaPago,
+            monto_pagado_usd: montoUSD,
+            tasa_usada: tasaUsada,
+            metodo_pago: metodoPago,
+            referencia: referencia,
+            banco_origen: banco,
+            validado: validado
+        };
+
+        const comprobanteFile = document.getElementById('p-comprobante').files[0] || null;
+        const retIVAFile = document.getElementById('p-ret-iva').files[0] || null;
+        const retISLRFile = document.getElementById('p-ret-islr').files[0] || null;
+
+        await createPago(pagoData, comprobanteFile, retIVAFile, retISLRFile);
+
+        hideLoading('#btn-guardar-pago');
+        showAlert('Pago registrado exitosamente', 'success');
+        limpiarFormularioPago();
+        await seleccionarVenta(ventaSeleccionada.id);
+
+    } catch (error) {
+        hideLoading('#btn-guardar-pago');
+        console.error('Error guardando pago simple:', error);
+        showAlert('Error al registrar el pago: ' + error.message, 'error');
+        throw error;
+    }
+}
+
+// ============================================
+// MOSTRAR MODAL DE DISTRIBUCIÓN
+// ============================================
+
+let distribucionData = null;
+
+async function mostrarModalDistribucion(ventaPrincipal, saldoPrincipal, montoTotal, notasDisponibles, datosPago) {
+    const excedente = montoTotal - saldoPrincipal;
+    const modal = document.getElementById('modal-distribucion');
+
+    // Guardar datos para usar al confirmar
+    distribucionData = {
+        ventaPrincipal,
+        saldoPrincipal,
+        montoTotal,
+        excedente,
+        notasDisponibles,
+        datosPago,
+        asignaciones: {}
+    };
+
+    // Llenar información
+    document.getElementById('d-monto-total').textContent = formatUSD(montoTotal);
+    document.getElementById('d-saldo-nota').textContent = formatUSD(saldoPrincipal);
+    document.getElementById('d-excedente').textContent = formatUSD(excedente);
+
+    // Llenar tabla de notas disponibles
+    const tbody = document.getElementById('d-tbody-notas');
+    tbody.innerHTML = '';
+
+    const referenciaBase = datosPago.referenciaOriginal || 'PAGO';
+
+    notasDisponibles.forEach((nota, index) => {
+        const refSugerida = `${referenciaBase}-${index + 1}`;
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid var(--gray-100)';
+        tr.innerHTML = `
+            <td style="padding: 6px 8px; text-align: center;">
+                <input type="checkbox" class="d-check-nota" data-id="${nota.id}" ${index === 0 ? 'checked' : ''} style="width: 16px; height: 16px;">
+            </td>
+            <td style="padding: 6px 8px;">
+                <strong>${nota.correlacion_a2}</strong>
+                ${nota.numero_factura ? `<br><small style="color: var(--gray-500);">Factura: ${nota.numero_factura}</small>` : ''}
+            </td>
+            <td style="padding: 6px 8px; text-align: left;">
+                <span style="color: var(--danger); font-weight: 600;">${formatUSD(nota.saldo)}</span>
+            </td>
+            <td style="padding: 6px 8px; text-align: center;">
+                <input type="number" class="form-control d-monto-asignar" data-venta-id="${nota.id}" 
+                       style="width: 100px; padding: 0.3rem 0.5rem; font-size: 0.875rem; display: inline-block;" 
+                       value="${index === 0 ? Math.min(excedente, nota.saldo).toFixed(2) : '0.00'}" 
+                       step="0.01" min="0" max="${nota.saldo}">
+            </td>
+            <td style="padding: 6px 8px;">
+                <input type="text" class="form-control d-referencia" data-id="${nota.id}" 
+                       style="width: 120px; padding: 0.3rem 0.5rem; font-size: 0.75rem;" 
+                       value="${refSugerida}">
+            </td>
+        `;
+        tbody.appendChild(tr);
+
+        // Inicializar asignación
+        distribucionData.asignaciones[nota.id] = index === 0 ? Math.min(excedente, nota.saldo) : 0;
+
+        // Eventos para actualizar el total restante al cambiar monto
+        const inputMonto = tr.querySelector('.d-monto-asignar');
+        const checkbox = tr.querySelector('.d-check-nota');
+        const inputRef = tr.querySelector('.d-referencia');
+
+        inputMonto.addEventListener('input', function() {
+            const ventaId = this.dataset.ventaId;
+            const val = parseFloat(this.value) || 0;
+            distribucionData.asignaciones[ventaId] = val;
+            // Guardar referencia
+            distribucionData.referencias = distribucionData.referencias || {};
+            distribucionData.referencias[ventaId] = inputRef.value;
+            actualizarExcedenteRestante();
+        });
+
+        inputRef.addEventListener('input', function() {
+            const ventaId = this.dataset.id;
+            distribucionData.referencias = distribucionData.referencias || {};
+            distribucionData.referencias[ventaId] = this.value;
+        });
+
+        checkbox.addEventListener('change', function() {
+            const row = this.closest('tr');
+            const inputMonto = row.querySelector('.d-monto-asignar');
+            const inputRef = row.querySelector('.d-referencia');
+            if (!this.checked) {
+                inputMonto.value = '0.00';
+                inputMonto.disabled = true;
+                inputRef.disabled = true;
+                distribucionData.asignaciones[inputMonto.dataset.ventaId] = 0;
+            } else {
+                inputMonto.disabled = false;
+                inputRef.disabled = false;
+                // Si el monto es 0, asignar un monto sugerido
+                if (parseFloat(inputMonto.value) === 0) {
+                    const excedenteRestante = calcularExcedenteRestante();
+                    const nota = notasDisponibles.find(n => n.id === inputMonto.dataset.ventaId);
+                    if (nota && excedenteRestante > 0) {
+                        const maximo = Math.min(excedenteRestante, nota.saldo);
+                        inputMonto.value = maximo.toFixed(2);
+                        distribucionData.asignaciones[inputMonto.dataset.ventaId] = maximo;
+                    }
+                }
+                actualizarExcedenteRestante();
+            }
+        });
+
+        // Guardar referencia inicial
+        distribucionData.referencias = distribucionData.referencias || {};
+        distribucionData.referencias[nota.id] = refSugerida;
+
+        // Si el primer checkbox está marcado, deshabilitar el input de referencia si no se quiere editar, pero lo dejamos editable
+    });
+
+    actualizarExcedenteRestante();
+
+    // Mostrar modal
+    modal.style.display = 'flex';
+
+    // Eventos del modal
+    document.getElementById('btn-cerrar-distribucion').addEventListener('click', cerrarModalDistribucion);
+    document.getElementById('btn-cancelar-distribucion').addEventListener('click', cerrarModalDistribucion);
+    document.getElementById('btn-confirmar-distribucion').addEventListener('click', confirmarDistribucion);
+    modal.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) cerrarModalDistribucion();
+    });
+}
+
+function cerrarModalDistribucion() {
+    document.getElementById('modal-distribucion').style.display = 'none';
+    distribucionData = null;
+}
+
+function calcularExcedenteRestante() {
+    if (!distribucionData) return 0;
+    const totalAsignado = Object.values(distribucionData.asignaciones).reduce((sum, v) => sum + v, 0);
+    return distribucionData.excedente - totalAsignado;
+}
+
+function actualizarExcedenteRestante() {
+    const restante = calcularExcedenteRestante();
+    document.getElementById('d-excedente-restante').textContent = formatUSD(Math.max(0, restante));
+    document.getElementById('d-excedente-restante').style.color = restante < 0 ? 'var(--danger)' : 'var(--diamelab-primary)';
+}
+
+async function confirmarDistribucion() {
+    if (!distribucionData) return;
+
+    const { ventaPrincipal, saldoPrincipal, montoTotal, notasDisponibles, datosPago, asignaciones, referencias } = distribucionData;
+
+    // Validar que el excedente esté completamente asignado
+    const excedente = montoTotal - saldoPrincipal;
+    const totalAsignado = Object.values(asignaciones).reduce((sum, v) => sum + v, 0);
+    const diferencia = excedente - totalAsignado;
+
+    if (Math.abs(diferencia) > 0.01) {
+        showAlert(`Falta asignar ${formatUSD(diferencia)} del excedente. Ajuste los montos.`, 'warning');
+        return;
+    }
+
+    // Filtrar notas con monto > 0
+    const notasSeleccionadas = notasDisponibles.filter(n => asignaciones[n.id] > 0.01);
+
+    // Confirmar con el usuario
+    let mensaje = `Se distribuirá el pago de ${formatUSD(montoTotal)} de la siguiente manera:\n`;
+    mensaje += `- Nota ${ventaPrincipal.correlacion_a2}: ${formatUSD(saldoPrincipal)}\n`;
+    notasSeleccionadas.forEach(n => {
+        mensaje += `- Nota ${n.correlacion_a2}: ${formatUSD(asignaciones[n.id])} (Ref: ${referencias[n.id] || 'N/A'})\n`;
+    });
+    mensaje += '\n¿Desea continuar?';
+
+    const confirmado = await confirmAction(mensaje);
+    if (!confirmado) return;
+
+    try {
+        showLoading('#btn-confirmar-distribucion', 'Registrando pagos...');
+
+        const user = JSON.parse(localStorage.getItem('diamelab_user') || '{}');
+        const comprobanteFile = document.getElementById('p-comprobante').files[0] || null;
+        const retIVAFile = document.getElementById('p-ret-iva').files[0] || null;
+        const retISLRFile = document.getElementById('p-ret-islr').files[0] || null;
+
+        // Construir lista de pagos a crear
+        const pagosData = [];
+
+        // Pago principal (saldo de la nota seleccionada)
+        if (saldoPrincipal > 0.01) {
+            const refPrincipal = datosPago.referenciaOriginal || 'PAGO';
+            pagosData.push({
+                venta_id: ventaPrincipal.id,
+                vendedor_id: user.id,
+                fecha_pago: datosPago.fechaPago,
+                monto_pagado_usd: saldoPrincipal,
+                tasa_usada: datosPago.tasaUsada,
+                metodo_pago: datosPago.metodoPago,
+                referencia: refPrincipal,
+                banco_origen: datosPago.banco,
+                validado: datosPago.validado
+            });
+        }
+
+        // Pagos para las notas seleccionadas
+        for (const nota of notasSeleccionadas) {
+            const monto = asignaciones[nota.id] || 0;
+            const ref = referencias[nota.id] || `${datosPago.referenciaOriginal || 'PAGO'}-${notasSeleccionadas.indexOf(nota) + 1}`;
+            if (monto > 0.01) {
+                pagosData.push({
+                    venta_id: nota.id,
+                    vendedor_id: user.id,
+                    fecha_pago: datosPago.fechaPago,
+                    monto_pagado_usd: monto,
+                    tasa_usada: datosPago.tasaUsada,
+                    metodo_pago: datosPago.metodoPago,
+                    referencia: ref,
+                    banco_origen: datosPago.banco,
+                    validado: datosPago.validado
+                });
+            }
+        }
+
+        // Crear todos los pagos con los mismos archivos adjuntos
+        await createPagosMultiples(pagosData, comprobanteFile, retIVAFile, retISLRFile);
+
+        hideLoading('#btn-confirmar-distribucion');
+        showAlert(`Pago distribuido exitosamente en ${pagosData.length} nota(s).`, 'success');
+        cerrarModalDistribucion();
+        limpiarFormularioPago();
+        await seleccionarVenta(ventaPrincipal.id);
+
+    } catch (error) {
+        hideLoading('#btn-confirmar-distribucion');
+        console.error('Error creando pagos distribuidos:', error);
+        showAlert('Error al registrar los pagos: ' + error.message, 'error');
+    }
+}
+
+
+// ============================================
 // EXPORTAR FUNCIONES GLOBALES
 // ============================================
 window.seleccionarVenta = seleccionarVenta;

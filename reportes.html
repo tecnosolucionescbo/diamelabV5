@@ -7,8 +7,8 @@
     <link rel="stylesheet" href="css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Librerías para PDF -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <style>
         .reporte-resumen {
             display: grid;
@@ -38,14 +38,11 @@
         .reporte-card.facturado .numero { color: var(--success); }
         .reporte-card.base .numero { color: var(--diamelab-primary); }
         .reporte-card.pendiente .numero { color: var(--danger); }
-        .btn-exportar {
-            margin-top: var(--space-md);
-        }
     </style>
 </head>
 <body>
     <div class="app-layout">
-        <!-- Sidebar (igual que los demás) -->
+        <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <img src="assets/logo-diamelab.jpg" alt="Diamelab">
@@ -72,7 +69,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                         Pagos
                     </a>
-                <a href="estado-cuenta.html" class="nav-link active">
+                    <a href="estado-cuenta.html" class="nav-link">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
                         Estado de Cuenta
                     </a>
@@ -112,6 +109,7 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- Topbar -->
             <header class="topbar">
                 <div class="topbar-left">
                     <button class="menu-toggle" id="menu-toggle">
@@ -179,13 +177,13 @@
 
                 <!-- Tabla de detalle -->
                 <div class="card" id="reporte-detalle" style="display: none;">
-                  <div class="card-header">
-    <h3>Detalle de Notas</h3>
-    <div style="display: flex; gap: var(--space-sm);">
-        <button class="btn btn-secondary btn-sm" id="btn-exportar-pdf">📄 PDF</button>
-        <button class="btn btn-secondary btn-sm" id="btn-exportar-csv">📊 CSV</button>
-    </div>
-</div>
+                    <div class="card-header">
+                        <h3>Detalle de Notas</h3>
+                        <div style="display: flex; gap: var(--space-sm);">
+                            <button class="btn btn-secondary btn-sm" id="btn-exportar-pdf">📄 PDF</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-exportar-csv">📊 CSV</button>
+                        </div>
+                    </div>
                     <div class="card-body" style="padding: 0;">
                         <div class="table-container">
                             <table class="table">
